@@ -57,3 +57,5 @@ REVOKE EXECUTE ON FUNCTION public.update_my_profile(TEXT, TEXT, TEXT)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.update_my_profile(TEXT, TEXT, TEXT)
   TO authenticated;
+
+NOTIFY pgrst, 'reload schema';
