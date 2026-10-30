@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/env/app_config.dart';
 import '../models/profile_model.dart';
 import '../services/supabase_service.dart';
@@ -156,6 +158,7 @@ class AuthRepository extends ChangeNotifier {
       params: {
         'p_display_name': displayName.trim(),
         'p_bio': bio?.trim().isEmpty == true ? null : bio?.trim(),
+        'p_avatar_path': _currentProfile?.avatarPath,
       },
     );
 
@@ -166,5 +169,68 @@ class AuthRepository extends ChangeNotifier {
     }
 
     await loadProfile();
+  }
+
+  /// Uploads a private avatar and keeps only its storage path in the profile row.
+  Future<void> uploadAvatar(Uint8List bytes, {String extension = 'jpg'}) async {
+    if (AppConfig.isDemoMode) {
+      throw Exception('Photo upload is available after signing in.');
+    }
+    final uid = currentUserId;
+    if (uid == null) throw Exception('Non connecté');
+    if (bytes.isEmpty || bytes.length > 3 * 1024 * 1024) {
+      throw Exception('Choisissez une image de moins de 3 Mo.');
+    }
+
+    final ext = extension.toLowerCase();
+    if (!['jpg', 'jpeg', 'png', 'webp'].contains(ext)) {
+      throw Exception('Formats autorisés : JPG, PNG ou WebP.');
+    }
+    final safeExtension = ext == 'jpeg' ? 'jpg' : ext;
+    final contentType = switch (safeExtension) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => 'image/jpeg',
+    };
+    // The existing Storage policy requires <user-id>/<numeric-filename>.<ext>.
+    final path = '$uid/${DateTime.now().microsecondsSinceEpoch}.$safeExtension';
+    final previousPath = _currentProfile?.avatarPath;
+
+    await SupabaseService.client.storage.from('student-avatars').uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(
+        upsert: false,
+        contentType: contentType,
+      ),
+    );
+
+    try {
+      await SupabaseService.client.rpc(
+        'update_my_profile',
+        params: {
+          'p_display_name': _currentProfile?.displayName ?? 'Étudiant FSEGN',
+          'p_bio': _currentProfile?.bio,
+          'p_avatar_path': path,
+        },
+      );
+      if (previousPath != null && previousPath != path) {
+        try {
+          await SupabaseService.client.storage
+              .from('student-avatars')
+              .remove([previousPath]);
+        } catch (_) {
+          // A stale old image is harmless if cleanup is denied or unavailable.
+        }
+      }
+      await loadProfile();
+    } catch (_) {
+      try {
+        await SupabaseService.client.storage
+            .from('student-avatars')
+            .remove([path]);
+      } catch (_) {}
+      rethrow;
+    }
   }
 }

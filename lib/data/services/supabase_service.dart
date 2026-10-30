@@ -6,6 +6,8 @@ import '../../core/env/app_config.dart';
 class SupabaseService {
   static bool _initialized = false;
   static String? _initializationFailure;
+  static final Map<String, String> _avatarUrlCache = {};
+  static final Map<String, DateTime> _avatarUrlExpiry = {};
 
   static Future<void> initialize() async {
     if (_initialized) return;
@@ -43,6 +45,23 @@ class SupabaseService {
       };
       debugPrint('Supabase initialization failed ($type).');
     }
+  }
+
+  /// Returns a short-lived URL for a photo in the existing private bucket.
+  static Future<String> signedAvatarUrl(String path) async {
+    final expiry = _avatarUrlExpiry[path];
+    final cached = _avatarUrlCache[path];
+    if (cached != null &&
+        expiry != null &&
+        expiry.isAfter(DateTime.now().add(const Duration(minutes: 2)))) {
+      return cached;
+    }
+    final url = await client.storage
+        .from('student-avatars')
+        .createSignedUrl(path, 3600);
+    _avatarUrlCache[path] = url;
+    _avatarUrlExpiry[path] = DateTime.now().add(const Duration(minutes: 58));
+    return url;
   }
 
   static bool get isInitialized => _initialized;

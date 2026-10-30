@@ -29,21 +29,25 @@ class ChatRepository extends ChangeNotifier {
             for (final item in list) {
               final senderId = item['sender_id'] as String;
               String senderName = 'Étudiant FSEGN';
+              String? senderAvatarPath;
 
-              // Fetch sender name if possible
+              // Fetch sender name and photo for the chat bubble.
               try {
-                final p = await SupabaseService.client
+                final profile = await SupabaseService.client
                     .from('profiles')
-                    .select('display_name')
+                    .select('display_name, avatar_path')
                     .eq('id', senderId)
                     .maybeSingle();
-                if (p != null) {
-                  senderName = p['display_name'] as String? ?? 'Étudiant FSEGN';
+                if (profile != null) {
+                  senderName =
+                      profile['display_name'] as String? ?? senderName;
+                  senderAvatarPath = profile['avatar_path'] as String?;
                 }
               } catch (_) {}
 
               final enriched = Map<String, dynamic>.from(item);
               enriched['sender_name'] = senderName;
+              enriched['sender_avatar_path'] = senderAvatarPath;
               messages.add(GroupMessageModel.fromJson(enriched));
             }
             return messages;
@@ -66,7 +70,7 @@ class ChatRepository extends ChangeNotifier {
         .from('group_messages')
         .select('''
           id, group_id, sender_id, message, created_at,
-          profiles!group_messages_sender_id_fkey(display_name)
+          profiles!group_messages_sender_id_fkey(display_name, avatar_path)
         ''')
         .eq('group_id', groupId)
         .order('created_at', ascending: true);

@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/env/app_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/cohort_constants.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/services/supabase_service.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
 import 'attendance_history_sheet.dart';
@@ -86,6 +88,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _changeAvatar() async {
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 900,
+      maxHeight: 900,
+    );
+    if (image == null || !mounted) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final extension = image.name.split('.').last.toLowerCase();
+      await AuthRepository.instance.uploadAvatar(
+        await image.readAsBytes(),
+        extension: extension,
+      );
+      if (mounted) {
+        UiHelpers.showSnackBar(context, 'Photo de profil mise à jour.');
+      }
+    } catch (e) {
+      if (mounted) {
+        UiHelpers.showSnackBar(
+          context,
+          e.toString().replaceAll('Exception: ', ''),
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _handleSignOut() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -144,19 +178,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     padding: const EdgeInsets.all(18),
                     child: Column(
                       children: [
-                        CircleAvatar(
-                          radius: 36,
-                          backgroundColor: AppTheme.primaryNavy,
-                          child: Text(
-                            profile?.displayName.isNotEmpty == true
-                                ? profile!.displayName[0].toUpperCase()
-                                : 'E',
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                        Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 42,
+                              backgroundColor: AppTheme.primaryNavy,
+                              child: profile?.avatarPath == null ||
+                                      AppConfig.isDemoMode
+                                  ? Text(
+                                      profile?.displayName.isNotEmpty == true
+                                          ? profile!.displayName[0].toUpperCase()
+                                          : 'E',
+                                      style: const TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : FutureBuilder<String>(
+                                      future: SupabaseService.signedAvatarUrl(
+                                        profile!.avatarPath!,
+                                      ),
+                                      builder: (context, snapshot) {
+                                        if (!snapshot.hasData) {
+                                          return const SizedBox(
+                                            width: 30,
+                                            height: 30,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          );
+                                        }
+                                        return ClipOval(
+                                          child: Image.network(
+                                            snapshot.data!,
+                                            width: 84,
+                                            height: 84,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(
+                                              Icons.person,
+                                              color: Colors.white,
+                                              size: 30,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
                             ),
-                          ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Material(
+                                color: AppTheme.tealAccent,
+                                shape: const CircleBorder(),
+                                child: IconButton(
+                                  tooltip: 'Changer la photo',
+                                  onPressed: _isLoading ? null : _changeAvatar,
+                                  icon: const Icon(
+                                    Icons.photo_camera_outlined,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 34,
+                                    height: 34,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
                         Text(
@@ -358,9 +451,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          '• Présence à une session confirmée : +5 pts\n'
-                          '• Absence après confirmation : -15 pts\n'
-                          '• Score initial : 100% (plafonné entre 0% et 100%)\n'
+                          '• Présence à une session confirmée : +5 pts
+'
+                          '• Absence après confirmation : -15 pts
+'
+                          '• Score initial : 100% (plafonné entre 0% et 100%)
+'
                           '• Système d’honneur : déclaration autonome post-séance.',
                           style: TextStyle(
                             fontSize: 12,
