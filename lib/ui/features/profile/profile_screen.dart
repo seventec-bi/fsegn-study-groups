@@ -183,14 +183,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             CircleAvatar(
                               radius: 42,
                               backgroundColor: AppTheme.primaryNavy,
-                              backgroundImage: profile?.avatarPath != null &&
-                                      !AppConfig.isDemoMode
-                                  ? NetworkImage(
-                                      SupabaseService.client.storage
-                                          .from('avatars')
-                                          .getPublicUrl(profile!.avatarPath!),
-                                    )
-                                  : null,
                               child: profile?.avatarPath == null ||
                                       AppConfig.isDemoMode
                                   ? Text(
@@ -203,7 +195,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         color: Colors.white,
                                       ),
                                     )
-                                  : null,
+                                  : FutureBuilder<String>(
+                                      future: SupabaseService.signedAvatarUrl(
+                                        profile!.avatarPath!,
+                                      ),
+                                      builder: (context, snapshot) {
+                                        if (!snapshot.hasData) {
+                                          return const SizedBox(
+                                            width: 30,
+                                            height: 30,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          );
+                                        }
+                                        return ClipOval(
+                                          child: Image.network(
+                                            snapshot.data!,
+                                            width: 84,
+                                            height: 84,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) =>
+                                                const Icon(
+                                              Icons.person,
+                                              color: Colors.white,
+                                              size: 30,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    ),
                             ),
                             Positioned(
                               right: 0,
