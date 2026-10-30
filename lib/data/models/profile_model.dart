@@ -1,8 +1,6 @@
 /// Student profile domain model.
 ///
-/// NOTE (Directive #1): Email addresses are deliberately excluded from this
-/// model and the public database table to protect student privacy.
-/// Student email is retrieved directly via Supabase Auth `currentUser.email`.
+/// Email addresses stay in Supabase Auth and are deliberately excluded here.
 class ProfileModel {
   final String id;
   final String displayName;
@@ -13,6 +11,7 @@ class ProfileModel {
   final String specialty;
   final int reliabilityScore;
   final DateTime createdAt;
+  final String? avatarPath;
 
   const ProfileModel({
     required this.id,
@@ -24,6 +23,7 @@ class ProfileModel {
     this.specialty = 'Business Computing',
     this.reliabilityScore = 100,
     required this.createdAt,
+    this.avatarPath,
   });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) {
@@ -39,26 +39,27 @@ class ProfileModel {
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'] as String)
           : DateTime.now(),
+      avatarPath: json['avatar_path'] as String?,
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'display_name': displayName,
-      'bio': bio,
-      'university': university,
-      'faculty': faculty,
-      'licence_year': licenceYear,
-      'specialty': specialty,
-      'reliability_score': reliabilityScore,
-    };
-  }
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'display_name': displayName,
+    'bio': bio,
+    'university': university,
+    'faculty': faculty,
+    'licence_year': licenceYear,
+    'specialty': specialty,
+    'reliability_score': reliabilityScore,
+    'avatar_path': avatarPath,
+  };
 
   ProfileModel copyWith({
     String? displayName,
     String? bio,
     int? reliabilityScore,
+    String? avatarPath,
   }) {
     return ProfileModel(
       id: id,
@@ -70,6 +71,7 @@ class ProfileModel {
       specialty: specialty,
       reliabilityScore: reliabilityScore ?? this.reliabilityScore,
       createdAt: createdAt,
+      avatarPath: avatarPath ?? this.avatarPath,
     );
   }
 }
