@@ -37,7 +37,7 @@ dependencies:
   supabase_flutter: ^2.8.3
   intl: ^0.20.2
   flutter_dotenv: ^5.2.1
-  uuid: ^4.5.1
+  uuid: ^4.5.1\n  image_picker: ^1.1.2
 
 dev_dependencies:
   flutter_test:
