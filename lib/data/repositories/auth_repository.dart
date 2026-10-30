@@ -170,4 +170,37 @@ class AuthRepository extends ChangeNotifier {
 
     await loadProfile();
   }
+
+  /// Uploads the signed-in student's profile image and saves its private path.
+  Future<void> uploadAvatar(Uint8List bytes, {String extension = 'jpg'}) async {
+    if (AppConfig.isDemoMode) {
+      throw Exception('Photo upload is available after signing in.');
+    }
+    final uid = currentUserId;
+    if (uid == null) throw Exception('Non connecté');
+    if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024) {
+      throw Exception('Choisissez une image de moins de 5 Mo.');
+    }
+
+    final safeExtension = extension.toLowerCase() == 'png' ? 'png' : 'jpg';
+    final path = '$uid/avatar.$safeExtension';
+    await SupabaseService.client.storage.from('avatars').uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(
+        upsert: true,
+        contentType: safeExtension == 'png' ? 'image/png' : 'image/jpeg',
+      ),
+    );
+
+    await SupabaseService.client.rpc(
+      'update_my_profile',
+      params: {
+        'p_display_name': _currentProfile?.displayName ?? 'Étudiant FSEGN',
+        'p_bio': _currentProfile?.bio,
+        'p_avatar_path': path,
+      },
+    );
+    await loadProfile();
+  }
 }
