@@ -15,6 +15,7 @@ class GroupMemberModel {
   // Joined public profile details (safe fields only)
   final String displayName;
   final int reliabilityScore;
+  final String? avatarPath;
 
   const GroupMemberModel({
     required this.id,
@@ -27,6 +28,7 @@ class GroupMemberModel {
     required this.joinedAt,
     this.displayName = 'Étudiant FSEGN',
     this.reliabilityScore = 100,
+    this.avatarPath,
   });
 
   bool get isCreator => role == 'creator';
@@ -34,14 +36,17 @@ class GroupMemberModel {
   factory GroupMemberModel.fromJson(Map<String, dynamic> json) {
     String dName = 'Étudiant FSEGN';
     int rScore = 100;
+    String? avatarKey;
 
     if (json['profiles'] is Map<String, dynamic>) {
       final p = json['profiles'] as Map<String, dynamic>;
       dName = p['display_name'] as String? ?? 'Étudiant FSEGN';
       rScore = (p['reliability_score'] as num?)?.toInt() ?? 100;
+      avatarKey = p['avatar_path'] as String?;
     } else {
       dName = json['display_name'] as String? ?? 'Étudiant FSEGN';
       rScore = (json['reliability_score'] as num?)?.toInt() ?? 100;
+      avatarKey = json['avatar_path'] as String?;
     }
 
     return GroupMemberModel(
@@ -59,6 +64,7 @@ class GroupMemberModel {
           : DateTime.now(),
       displayName: dName,
       reliabilityScore: rScore,
+      avatarPath: avatarKey,
     );
   }
 }

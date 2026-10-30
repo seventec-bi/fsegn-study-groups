@@ -4,8 +4,8 @@ import '../../../core/env/app_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/cohort_constants.dart';
 import '../../../data/repositories/auth_repository.dart';
-import '../../../data/services/supabase_service.dart';
 import '../../core/responsive_scaffold.dart';
+import '../../core/student_avatar.dart';
 import '../../core/ui_helpers.dart';
 import 'attendance_history_sheet.dart';
 
@@ -44,7 +44,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             TextField(
               controller: bioController,
               maxLines: 3,
-              maxLength: 150,
+              maxLength: 250,
               decoration: const InputDecoration(
                 labelText: 'Courte bio (optionnel)',
               ),
@@ -174,58 +174,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
               children: [
                 // Profile Header Card
                 Card(
+                  color: AppTheme.primaryNavy,
+                  elevation: 5,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(22),
+                  ),
                   child: Padding(
                     padding: const EdgeInsets.all(18),
                     child: Column(
                       children: [
                         Stack(
                           children: [
-                            CircleAvatar(
+                            StudentAvatar(
+                              displayName: profile?.displayName ?? 'Étudiant',
+                              avatarKey: AppConfig.isDemoMode
+                                  ? null
+                                  : profile?.avatarPath,
                               radius: 42,
-                              backgroundColor: AppTheme.primaryNavy,
-                              child: profile?.avatarPath == null ||
-                                      AppConfig.isDemoMode
-                                  ? Text(
-                                      profile?.displayName.isNotEmpty == true
-                                          ? profile!.displayName[0].toUpperCase()
-                                          : 'E',
-                                      style: const TextStyle(
-                                        fontSize: 28,
-                                        fontWeight: FontWeight.w800,
-                                        color: Colors.white,
-                                      ),
-                                    )
-                                  : FutureBuilder<String>(
-                                      future: SupabaseService.signedAvatarUrl(
-                                        profile!.avatarPath!,
-                                      ),
-                                      builder: (context, snapshot) {
-                                        if (!snapshot.hasData) {
-                                          return const SizedBox(
-                                            width: 30,
-                                            height: 30,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          );
-                                        }
-                                        return ClipOval(
-                                          child: Image.network(
-                                            snapshot.data!,
-                                            width: 84,
-                                            height: 84,
-                                            fit: BoxFit.cover,
-                                            errorBuilder: (_, __, ___) =>
-                                                const Icon(
-                                              Icons.person,
-                                              color: Colors.white,
-                                              size: 30,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    ),
+                              backgroundColor: AppTheme.tealLight,
                             ),
                             Positioned(
                               right: 0,
@@ -258,7 +224,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.w800,
-                            color: AppTheme.primaryNavy,
+                            color: Colors.white,
                           ),
                         ),
                         if (profile?.bio != null &&
@@ -269,7 +235,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             textAlign: TextAlign.center,
                             style: const TextStyle(
                               fontSize: 13,
-                              color: AppTheme.textMuted,
+                              color: Colors.white70,
                               fontStyle: FontStyle.italic,
                             ),
                           ),
@@ -283,9 +249,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             vertical: 5,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
+                            color: Colors.white.withAlpha(24),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: AppTheme.borderSubtle),
+                            border: Border.all(color: Colors.white30),
                           ),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
@@ -293,14 +259,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               const Icon(
                                 Icons.lock_outline,
                                 size: 13,
-                                color: AppTheme.textMuted,
+                                color: Colors.white70,
                               ),
                               const SizedBox(width: 5),
                               Text(
                                 '$email (Privé)',
                                 style: const TextStyle(
                                   fontSize: 12,
-                                  color: AppTheme.textMuted,
+                                  color: Colors.white,
                                 ),
                               ),
                             ],
@@ -309,6 +275,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         const SizedBox(height: 14),
 
                         OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Colors.white70),
+                          ),
                           onPressed: _isLoading ? null : _openEditProfileDialog,
                           icon: _isLoading
                               ? const SizedBox(
