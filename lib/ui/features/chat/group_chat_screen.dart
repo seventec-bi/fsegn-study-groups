@@ -350,7 +350,10 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatar = _senderAvatar(message);
+    final avatarPath = message.senderAvatarPath;
+    final avatarFuture = avatarPath == null || avatarPath.isEmpty
+        ? null
+        : SupabaseService.signedAvatarUrl(avatarPath);
     final radius = BorderRadius.only(
       topLeft: const Radius.circular(18),
       topRight: const Radius.circular(18),
@@ -373,8 +376,7 @@ class _MessageBubble extends StatelessWidget {
                   : CircleAvatar(
                       radius: 14,
                       backgroundColor: AppTheme.tealLight,
-                      backgroundImage: avatar,
-                      child: avatar == null
+                      child: avatarFuture == null
                           ? Text(
                               message.senderName.isEmpty
                                   ? '?'
@@ -385,7 +387,30 @@ class _MessageBubble extends StatelessWidget {
                                 color: AppTheme.primaryNavy,
                               ),
                             )
-                          : null,
+                          : FutureBuilder<String>(
+                              future: avatarFuture,
+                              builder: (context, snapshot) =>
+                                  snapshot.hasData
+                                      ? ClipOval(
+                                          child: Image.network(
+                                            snapshot.data!,
+                                            width: 28,
+                                            height: 28,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        )
+                                      : Text(
+                                          message.senderName.isEmpty
+                                              ? '?'
+                                              : message.senderName[0]
+                                                  .toUpperCase(),
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.primaryNavy,
+                                          ),
+                                        ),
+                            ),
                     ),
             ),
             const SizedBox(width: 5),
@@ -458,12 +483,3 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-ImageProvider? _senderAvatar(GroupMessageModel message) {
-  final path = message.senderAvatarPath;
-  if (path == null || path.isEmpty || !SupabaseService.isInitialized) {
-    return null;
-  }
-  return NetworkImage(
-    SupabaseService.client.storage.from('avatars').getPublicUrl(path),
-  );
-}
