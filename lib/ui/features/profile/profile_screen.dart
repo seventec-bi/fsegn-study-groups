@@ -451,9 +451,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          '• Présence à une session confirmée : +5 pts\\n'
-                          '• Absence après confirmation : -15 pts\\n'
-                          '• Score initial : 100% (plafonné entre 0% et 100%)\\n'
+                          '• Présence à une session confirmée : +5 pts\n'
+                          '• Absence après confirmation : -15 pts\n'
+                          '• Score initial : 100% (plafonné entre 0% et 100%)\n'
                           '• Système d’honneur : déclaration autonome post-séance.',
                           style: TextStyle(
                             fontSize: 12,
