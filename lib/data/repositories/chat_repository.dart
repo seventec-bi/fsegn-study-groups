@@ -34,7 +34,7 @@ class ChatRepository extends ChangeNotifier {
               try {
                 final p = await SupabaseService.client
                     .from('profiles')
-                    .select('display_name')
+                    .select('display_name, avatar_path')
                     .eq('id', senderId)
                     .maybeSingle();
                 if (p != null) {
@@ -43,7 +43,7 @@ class ChatRepository extends ChangeNotifier {
               } catch (_) {}
 
               final enriched = Map<String, dynamic>.from(item);
-              enriched['sender_name'] = senderName;
+              enriched['sender_name'] = senderName;\n              try {\n                final p = await SupabaseService.client.from('profiles').select('avatar_path').eq('id', senderId).maybeSingle();\n                enriched['sender_avatar_path'] = p?['avatar_path'];\n              } catch (_) {}
               messages.add(GroupMessageModel.fromJson(enriched));
             }
             return messages;
@@ -66,7 +66,7 @@ class ChatRepository extends ChangeNotifier {
         .from('group_messages')
         .select('''
           id, group_id, sender_id, message, created_at,
-          profiles!group_messages_sender_id_fkey(display_name)
+          profiles!group_messages_sender_id_fkey(display_name, avatar_path)
         ''')
         .eq('group_id', groupId)
         .order('created_at', ascending: true);
