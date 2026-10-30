@@ -1,8 +1,8 @@
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';\nimport 'package:image_picker/image_picker.dart';
 import '../../../core/env/app_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/cohort_constants.dart';
-import '../../../data/repositories/auth_repository.dart';
+import '../../../data/repositories/auth_repository.dart';\nimport '../../../data/services/supabase_service.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
 import 'attendance_history_sheet.dart';
@@ -86,6 +86,38 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  Future<void> _changeAvatar() async {
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 900,
+      maxHeight: 900,
+    );
+    if (image == null || !mounted) return;
+
+    setState(() => _isLoading = true);
+    try {
+      final extension = image.name.split('.').last.toLowerCase();
+      await AuthRepository.instance.uploadAvatar(
+        await image.readAsBytes(),
+        extension: extension,
+      );
+      if (mounted) {
+        UiHelpers.showSnackBar(context, 'Photo de profil mise à jour.');
+      }
+    } catch (e) {
+      if (mounted) {
+        UiHelpers.showSnackBar(
+          context,
+          e.toString().replaceAll('Exception: ', ''),
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
   Future<void> _handleSignOut() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -144,19 +176,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     padding: const EdgeInsets.all(18),
                     child: Column(
                       children: [
-                        CircleAvatar(
-                          radius: 36,
-                          backgroundColor: AppTheme.primaryNavy,
-                          child: Text(
-                            profile?.displayName.isNotEmpty == true
-                                ? profile!.displayName[0].toUpperCase()
-                                : 'E',
-                            style: const TextStyle(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
+                        Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 42,
+                              backgroundColor: AppTheme.primaryNavy,
+                              backgroundImage: profile?.avatarPath != null &&
+                                      !AppConfig.isDemoMode
+                                  ? NetworkImage(
+                                      SupabaseService.client.storage
+                                          .from('avatars')
+                                          .getPublicUrl(profile!.avatarPath!),
+                                    )
+                                  : null,
+                              child: profile?.avatarPath == null ||
+                                      AppConfig.isDemoMode
+                                  ? Text(
+                                      profile?.displayName.isNotEmpty == true
+                                          ? profile!.displayName[0].toUpperCase()
+                                          : 'E',
+                                      style: const TextStyle(
+                                        fontSize: 28,
+                                        fontWeight: FontWeight.w800,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : null,
                             ),
-                          ),
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Material(
+                                color: AppTheme.tealAccent,
+                                shape: const CircleBorder(),
+                                child: IconButton(
+                                  tooltip: 'Changer la photo',
+                                  onPressed: _isLoading ? null : _changeAvatar,
+                                  icon: const Icon(
+                                    Icons.photo_camera_outlined,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 34,
+                                    height: 34,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
                         Text(
