@@ -1,44 +1,9 @@
--- Profile photos: public read, authenticated owner-only writes.
+-- The project already has the private student-avatars bucket and
+-- owner-scoped Storage policies. Reuse those controls; only extend the profile RPC
+-- to store a path in that existing bucket.
 ALTER TABLE public.profiles
   ADD COLUMN IF NOT EXISTS avatar_path TEXT;
 
-INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES ('avatars', 'avatars', true, 5242880, ARRAY['image/jpeg', 'image/png'])
-ON CONFLICT (id) DO UPDATE
-SET public = EXCLUDED.public,
-    file_size_limit = EXCLUDED.file_size_limit,
-    allowed_mime_types = EXCLUDED.allowed_mime_types;
-
-DROP POLICY IF EXISTS "Avatar images are publicly readable" ON storage.objects;
-CREATE POLICY "Avatar images are publicly readable"
-  ON storage.objects FOR SELECT
-  TO public
-  USING (bucket_id = 'avatars');
-
-DROP POLICY IF EXISTS "Students upload their own avatar" ON storage.objects;
-CREATE POLICY "Students upload their own avatar"
-  ON storage.objects FOR INSERT
-  TO authenticated
-  WITH CHECK (
-    bucket_id = 'avatars'
-    AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
-  );
-
-DROP POLICY IF EXISTS "Students update their own avatar" ON storage.objects;
-CREATE POLICY "Students update their own avatar"
-  ON storage.objects FOR UPDATE
-  TO authenticated
-  USING (
-    bucket_id = 'avatars'
-    AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
-  )
-  WITH CHECK (
-    bucket_id = 'avatars'
-    AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
-  );
-
--- Replace the existing profile RPC to allow only the authenticated user's own
--- avatar path while preserving its protection for cohort and reliability fields.
 DROP FUNCTION IF EXISTS public.update_my_profile(TEXT, TEXT);
 
 CREATE FUNCTION public.update_my_profile(
@@ -68,8 +33,9 @@ BEGIN
     RAISE EXCEPTION 'La bio ne peut pas dépasser 250 caractères.';
   END IF;
 
+  -- Match the existing Storage policy: <user-id>/<numeric-name>.<image-ext>.
   IF p_avatar_path IS NOT NULL
-     AND p_avatar_path !~ ('^' || v_user_id::text || '/avatar\.(jpg|png)$') THEN
+     AND p_avatar_path !~ ('^' || v_user_id::text || '/[0-9]+[.](jpg|png|webp)$') THEN
     RAISE EXCEPTION 'Chemin de photo invalide.';
   END IF;
 
