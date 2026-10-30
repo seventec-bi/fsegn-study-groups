@@ -55,7 +55,8 @@ class _GroupListScreenState extends State<GroupListScreen> {
             : _searchController.text.trim(),
         date: _criteria.date,
         availableOnly: _criteria.availableOnly,
-        userGroupsOnly: _criteria.userGroupsOnly,
+        userGroupsOnly:
+            widget.initialUserGroupsOnly || _criteria.userGroupsOnly,
       );
       if (mounted) {
         setState(() {
@@ -82,7 +83,10 @@ class _GroupListScreenState extends State<GroupListScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => GroupFilterSheet(currentCriteria: _criteria),
+      builder: (_) => GroupFilterSheet(
+        currentCriteria: _criteria,
+        lockUserGroupsOnly: widget.initialUserGroupsOnly,
+      ),
     );
 
     if (updated != null) {
@@ -232,7 +236,9 @@ class _GroupListScreenState extends State<GroupListScreen> {
                   InkWell(
                     onTap: () {
                       setState(() {
-                        _criteria = const FilterCriteria();
+                        _criteria = FilterCriteria(
+                          userGroupsOnly: widget.initialUserGroupsOnly,
+                        );
                         _searchController.clear();
                       });
                       _loadGroups();
@@ -284,8 +290,12 @@ class _GroupListScreenState extends State<GroupListScreen> {
                     child: _groups.isEmpty
                         ? UiHelpers.buildEmptyState(
                             icon: Icons.search_off_rounded,
-                            title: 'Aucun groupe d’étude trouvé',
-                            description: _criteria.hasActiveFilters
+                            title: widget.initialUserGroupsOnly
+                                ? 'Vous n’avez rejoint aucun groupe'
+                                : 'Aucun groupe d’étude trouvé',
+                            description: widget.initialUserGroupsOnly
+                                ? 'Les groupes que vous créez ou rejoignez apparaîtront ici.'
+                                : _criteria.hasActiveFilters
                                 ? 'Aucun groupe ne correspond à vos filtres. Essayez de réinitialiser la recherche.'
                                 : 'Soyez le premier à créer un groupe d’étude pour votre promo FSEGN L1 !',
                             buttonText: 'Créer un groupe',

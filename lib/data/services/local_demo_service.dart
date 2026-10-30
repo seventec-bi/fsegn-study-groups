@@ -259,6 +259,35 @@ class LocalDemoService {
   // --- Profile Operations ---
   ProfileModel getProfile() => _currentProfile;
 
+  ProfileModel? getStudentProfile(String userId) {
+    if (userId == _currentProfile.id) return _currentProfile;
+    for (final member in _members) {
+      if (member.userId == userId) {
+        return ProfileModel(
+          id: member.userId,
+          displayName: member.displayName,
+          reliabilityScore: member.reliabilityScore,
+          createdAt: member.joinedAt,
+          avatarPath: member.avatarPath,
+        );
+      }
+    }
+    return null;
+  }
+
+  List<StudyGroupModel> getGroupsForStudent(String userId) {
+    final groupIds = _members
+        .where((member) => member.userId == userId)
+        .map((member) => member.groupId)
+        .toSet();
+    return _groups
+        .where(
+          (group) => groupIds.contains(group.id) && group.status != 'cancelled',
+        )
+        .toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+  }
+
   Future<void> updateProfile({required String displayName, String? bio}) async {
     _currentProfile = _currentProfile.copyWith(
       displayName: displayName,

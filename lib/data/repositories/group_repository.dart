@@ -39,6 +39,26 @@ class GroupRepository extends ChangeNotifier {
       }
 
       final uid = AuthRepository.instance.currentUserId;
+      if (userGroupsOnly && uid == null) {
+        _cachedGroups = [];
+        return _cachedGroups;
+      }
+      List<String>? memberGroupIds;
+      if (userGroupsOnly) {
+        final memberships = await SupabaseService.client
+            .from('group_members')
+            .select('group_id')
+            .eq('user_id', uid!);
+        memberGroupIds = (memberships as List<dynamic>)
+            .map((row) => row['group_id'] as String)
+            .toSet()
+            .toList();
+        if (memberGroupIds.isEmpty) {
+          _cachedGroups = [];
+          return _cachedGroups;
+        }
+      }
+
       var query = SupabaseService.client
           .from('study_groups')
           .select('''
@@ -49,6 +69,10 @@ class GroupRepository extends ChangeNotifier {
       ''')
           .eq('cohort_key', 'fsegn_l1_bc')
           .neq('status', 'cancelled');
+
+      if (memberGroupIds != null) {
+        query = query.inFilter('id', memberGroupIds);
+      }
 
       if (subject != null && subject.isNotEmpty) {
         query = query.eq('subject', subject);
@@ -121,7 +145,7 @@ class GroupRepository extends ChangeNotifier {
         .select('''
       id, group_id, user_id, role, attendance_confirmed,
       attendance_status, attendance_recorded_at, joined_at,
-      profiles!group_members_user_id_fkey(display_name, reliability_score)
+      profiles!group_members_user_id_fkey(display_name, reliability_score, avatar_path)
     ''')
         .eq('group_id', groupId)
         .order('joined_at', ascending: true);
@@ -129,6 +153,39 @@ class GroupRepository extends ChangeNotifier {
     return (data as List<dynamic>).map((item) {
       return GroupMemberModel.fromJson(item as Map<String, dynamic>);
     }).toList();
+  }
+
+  /// Returns study groups the specified student has joined, for their profile.
+  Future<List<StudyGroupModel>> getGroupsForStudent(String studentId) async {
+    if (AppConfig.isDemoMode) {
+      return LocalDemoService.instance.getGroupsForStudent(studentId);
+    }
+
+    final memberships = await SupabaseService.client
+        .from('group_members')
+        .select('group_id')
+        .eq('user_id', studentId);
+    final groupIds = (memberships as List<dynamic>)
+        .map((row) => row['group_id'] as String)
+        .toSet()
+        .toList();
+    if (groupIds.isEmpty) return [];
+
+    final data = await SupabaseService.client
+        .from('study_groups')
+        .select('''
+          id, creator_id, subject, topic, description, meeting_location,
+          start_time, end_time, capacity, status, cohort_key, created_at,
+          profiles!study_groups_creator_id_fkey(display_name),
+          group_members(id, user_id, attendance_confirmed, attendance_status)
+        ''')
+        .inFilter('id', groupIds)
+        .neq('status', 'cancelled')
+        .order('start_time', ascending: true);
+
+    return (data as List<dynamic>)
+        .map((row) => StudyGroupModel.fromJson(row as Map<String, dynamic>))
+        .toList();
   }
 
   /// DIRECTIVE #2: Join group via transactional Postgres function
