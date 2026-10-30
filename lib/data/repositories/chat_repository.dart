@@ -43,7 +43,15 @@ class ChatRepository extends ChangeNotifier {
               } catch (_) {}
 
               final enriched = Map<String, dynamic>.from(item);
-              enriched['sender_name'] = senderName;\n              try {\n                final p = await SupabaseService.client.from('profiles').select('avatar_path').eq('id', senderId).maybeSingle();\n                enriched['sender_avatar_path'] = p?['avatar_path'];\n              } catch (_) {}
+              enriched['sender_name'] = senderName;
+              try {
+                final profile = await SupabaseService.client
+                    .from('profiles')
+                    .select('avatar_path')
+                    .eq('id', senderId)
+                    .maybeSingle();
+                enriched['sender_avatar_path'] = profile?['avatar_path'];
+              } catch (_) {}
               messages.add(GroupMessageModel.fromJson(enriched));
             }
             return messages;
