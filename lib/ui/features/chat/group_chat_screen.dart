@@ -239,7 +239,7 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
                                         vertical: 5,
                                       ),
                                       child: Text(
-                                        DateFormat('d MMMM yyyy', 'fr')
+                                        DateFormat('dd/MM/yyyy')
                                             .format(msg.createdAt.toLocal()),
                                         style: const TextStyle(
                                           fontSize: 11,
