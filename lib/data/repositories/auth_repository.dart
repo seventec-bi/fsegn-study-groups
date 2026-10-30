@@ -171,36 +171,66 @@ class AuthRepository extends ChangeNotifier {
     await loadProfile();
   }
 
-  /// Uploads the signed-in student's profile image and saves its private path.
+  /// Uploads a private avatar and keeps only its storage path in the profile row.
   Future<void> uploadAvatar(Uint8List bytes, {String extension = 'jpg'}) async {
     if (AppConfig.isDemoMode) {
       throw Exception('Photo upload is available after signing in.');
     }
     final uid = currentUserId;
     if (uid == null) throw Exception('Non connecté');
-    if (bytes.isEmpty || bytes.length > 5 * 1024 * 1024) {
-      throw Exception('Choisissez une image de moins de 5 Mo.');
+    if (bytes.isEmpty || bytes.length > 3 * 1024 * 1024) {
+      throw Exception('Choisissez une image de moins de 3 Mo.');
     }
 
-    final safeExtension = extension.toLowerCase() == 'png' ? 'png' : 'jpg';
-    final path = '$uid/avatar.$safeExtension';
-    await SupabaseService.client.storage.from('avatars').uploadBinary(
+    final ext = extension.toLowerCase();
+    if (!['jpg', 'jpeg', 'png', 'webp'].contains(ext)) {
+      throw Exception('Formats autorisés : JPG, PNG ou WebP.');
+    }
+    final safeExtension = ext == 'jpeg' ? 'jpg' : ext;
+    final contentType = switch (safeExtension) {
+      'png' => 'image/png',
+      'webp' => 'image/webp',
+      _ => 'image/jpeg',
+    };
+    // The existing Storage policy requires <user-id>/<numeric-filename>.<ext>.
+    final path = '$uid/${DateTime.now().microsecondsSinceEpoch}.$safeExtension';
+    final previousPath = _currentProfile?.avatarPath;
+
+    await SupabaseService.client.storage.from('student-avatars').uploadBinary(
       path,
       bytes,
       fileOptions: FileOptions(
-        upsert: true,
-        contentType: safeExtension == 'png' ? 'image/png' : 'image/jpeg',
+        upsert: false,
+        contentType: contentType,
       ),
     );
 
-    await SupabaseService.client.rpc(
-      'update_my_profile',
-      params: {
-        'p_display_name': _currentProfile?.displayName ?? 'Étudiant FSEGN',
-        'p_bio': _currentProfile?.bio,
-        'p_avatar_path': path,
-      },
-    );
-    await loadProfile();
+    try {
+      await SupabaseService.client.rpc(
+        'update_my_profile',
+        params: {
+          'p_display_name': _currentProfile?.displayName ?? 'Étudiant FSEGN',
+          'p_bio': _currentProfile?.bio,
+          'p_avatar_path': path,
+        },
+      );
+      if (previousPath != null && previousPath != path) {
+        try {
+          await SupabaseService.client.storage
+              .from('student-avatars')
+              .remove([previousPath]);
+        } catch (_) {
+          // A stale old image is harmless if cleanup is denied or unavailable.
+        }
+      }
+      await loadProfile();
+    } catch (_) {
+      try {
+        await SupabaseService.client.storage
+            .from('student-avatars')
+            .remove([path]);
+      } catch (_) {}
+      rethrow;
+    }
   }
 }
