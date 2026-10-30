@@ -1,4 +1,6 @@
-import 'dart:typed_data';\nimport 'package:flutter/foundation.dart';\nimport 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/env/app_config.dart';
 import '../models/profile_model.dart';
 import '../services/supabase_service.dart';
@@ -155,7 +157,8 @@ class AuthRepository extends ChangeNotifier {
       'update_my_profile',
       params: {
         'p_display_name': displayName.trim(),
-        'p_bio': bio?.trim().isEmpty == true ? null : bio?.trim(),\n        'p_avatar_path': _currentProfile?.avatarPath,
+        'p_bio': bio?.trim().isEmpty == true ? null : bio?.trim(),
+        'p_avatar_path': _currentProfile?.avatarPath,
       },
     );
 
