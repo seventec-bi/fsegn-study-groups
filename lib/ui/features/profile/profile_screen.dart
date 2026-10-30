@@ -1,8 +1,10 @@
-import 'package:flutter/material.dart';\nimport 'package:image_picker/image_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/env/app_config.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/constants/cohort_constants.dart';
-import '../../../data/repositories/auth_repository.dart';\nimport '../../../data/services/supabase_service.dart';
+import '../../../data/repositories/auth_repository.dart';
+import '../../../data/services/supabase_service.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
 import 'attendance_history_sheet.dart';
@@ -427,9 +429,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                         const SizedBox(height: 4),
                         const Text(
-                          '• Présence à une session confirmée : +5 pts\n'
-                          '• Absence après confirmation : -15 pts\n'
-                          '• Score initial : 100% (plafonné entre 0% et 100%)\n'
+                          '• Présence à une session confirmée : +5 pts
+'
+                          '• Absence après confirmation : -15 pts
+'
+                          '• Score initial : 100% (plafonné entre 0% et 100%)
+'
                           '• Système d’honneur : déclaration autonome post-séance.',
                           style: TextStyle(
                             fontSize: 12,
