@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:uuid/uuid.dart';
 import '../models/profile_model.dart';
 import '../models/study_group_model.dart';
-import '../models/study_session_model.dart';
 import '../models/group_member_model.dart';
 import '../models/group_message_model.dart';
 import '../models/attendance_record_model.dart';
@@ -260,35 +259,6 @@ class LocalDemoService {
   // --- Profile Operations ---
   ProfileModel getProfile() => _currentProfile;
 
-  ProfileModel? getStudentProfile(String userId) {
-    if (userId == _currentProfile.id) return _currentProfile;
-    for (final member in _members) {
-      if (member.userId == userId) {
-        return ProfileModel(
-          id: member.userId,
-          displayName: member.displayName,
-          reliabilityScore: member.reliabilityScore,
-          createdAt: member.joinedAt,
-          avatarPath: member.avatarPath,
-        );
-      }
-    }
-    return null;
-  }
-
-  List<StudyGroupModel> getGroupsForStudent(String userId) {
-    final groupIds = _members
-        .where((member) => member.userId == userId)
-        .map((member) => member.groupId)
-        .toSet();
-    return _groups
-        .where(
-          (group) => groupIds.contains(group.id) && group.status != 'cancelled',
-        )
-        .toList()
-      ..sort((a, b) => a.startTime.compareTo(b.startTime));
-  }
-
   Future<void> updateProfile({required String displayName, String? bio}) async {
     _currentProfile = _currentProfile.copyWith(
       displayName: displayName,
@@ -325,14 +295,7 @@ class LocalDemoService {
           g.startTime.day,
         );
         final filterDate = DateTime(date.year, date.month, date.day);
-        if (!g.sessions.any(
-              (s) =>
-                  s.startTime.year == filterDate.year &&
-                  s.startTime.month == filterDate.month &&
-                  s.startTime.day == filterDate.day,
-            ) &&
-            !(g.sessions.isEmpty && gDate == filterDate))
-          return false;
+        if (gDate != filterDate) return false;
       }
       return true;
     }).toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
@@ -359,6 +322,10 @@ class LocalDemoService {
     if (group.status != 'active') {
       throw Exception('Ce groupe n’est plus actif.');
     }
+    if (group.isEnded) {
+      throw Exception('Cette session est déjà terminée.');
+    }
+
     final alreadyMember = _members.any(
       (m) => m.groupId == groupId && m.userId == _currentProfile.id,
     );
@@ -426,25 +393,36 @@ class LocalDemoService {
 
   // Directive #3: Creator added automatically as member with attendance_confirmed = false
   Future<StudyGroupModel> createGroup({
-    required String name,
-    required String iconEmoji,
     required String subject,
     required String topic,
     String? description,
+    required String meetingLocation,
+    required DateTime startTime,
+    required DateTime endTime,
     required int capacity,
   }) async {
+    if (startTime.isBefore(DateTime.now())) {
+      throw Exception('La date de début doit être dans le futur.');
+    }
+    if (endTime.isBefore(startTime)) {
+      throw Exception(
+        'L’heure de fin doit être postérieure à l’heure de début.',
+      );
+    }
+
     final groupId = _uuid.v4();
     final newGroup = StudyGroupModel(
       id: groupId,
       creatorId: _currentProfile.id,
-      name: name.trim(),
-      iconEmoji: iconEmoji,
       creatorName: _currentProfile.displayName,
       subject: subject,
       topic: topic.trim(),
       description: description?.trim().isEmpty == true
           ? null
           : description?.trim(),
+      meetingLocation: meetingLocation.trim(),
+      startTime: startTime,
+      endTime: endTime,
       capacity: capacity,
       status: 'active',
       createdAt: DateTime.now(),
@@ -472,205 +450,6 @@ class LocalDemoService {
     );
 
     return newGroup;
-  }
-
-  Future<void> createSession({
-    required String groupId,
-    required String topic,
-    required String location,
-    required DateTime start,
-    required DateTime end,
-    String? description,
-  }) async {
-    final index = _groups.indexWhere((g) => g.id == groupId);
-    if (index < 0) throw Exception('Groupe introuvable.');
-    if (!_groups[index].isUserMember)
-      throw Exception('Rejoignez le groupe pour planifier une séance.');
-    if (start.isBefore(DateTime.now()) || !end.isAfter(start))
-      throw Exception('Vérifiez les horaires de la séance.');
-    final g = _groups[index];
-    final session = StudySessionModel(
-      id: _uuid.v4(),
-      groupId: groupId,
-      createdBy: _currentProfile.id,
-      topic: topic.trim(),
-      description: description,
-      meetingLocation: location.trim(),
-      startTime: start,
-      endTime: end,
-    );
-    _groups[index] = g.copyWith(sessions: [...g.sessions, session]);
-  }
-
-  Future<void> updateSession({
-    required String sessionId,
-    required String topic,
-    required String location,
-    required DateTime start,
-    required DateTime end,
-    String? description,
-  }) async {
-    final index = _groups.indexWhere(
-      (g) => g.sessions.any((s) => s.id == sessionId),
-    );
-    if (index < 0) throw Exception('Rencontre introuvable.');
-    final group = _groups[index];
-    final session = group.sessions.firstWhere((s) => s.id == sessionId);
-    if (session.createdBy != _currentProfile.id)
-      throw Exception('Seul le créateur peut modifier cette rencontre.');
-    if (session.status != 'scheduled' || !session.startTime.isAfter(DateTime.now()))
-      throw Exception('Cette rencontre ne peut plus être modifiée.');
-    if (!start.isAfter(DateTime.now()) || !end.isAfter(start))
-      throw Exception('Vérifiez les horaires de la rencontre.');
-    _groups[index] = group.copyWith(
-      sessions: group.sessions
-          .map(
-            (s) => s.id == sessionId
-                ? s.copyWith(
-                    topic: topic.trim(),
-                    description: description?.trim(),
-                    clearDescription: description?.trim().isEmpty ?? true,
-                    meetingLocation: location.trim(),
-                    startTime: start,
-                    endTime: end,
-                  )
-                : s,
-          )
-          .toList(),
-    );
-  }
-
-  Future<void> cancelSession(String sessionId) async {
-    final index = _groups.indexWhere(
-      (g) => g.sessions.any((s) => s.id == sessionId),
-    );
-    if (index < 0) throw Exception('Rencontre introuvable.');
-    final group = _groups[index];
-    final session = group.sessions.firstWhere((s) => s.id == sessionId);
-    if (session.createdBy != _currentProfile.id)
-      throw Exception('Seul le créateur peut annuler cette rencontre.');
-    if (session.status != 'scheduled' || !session.startTime.isAfter(DateTime.now()))
-      throw Exception('Cette rencontre ne peut plus être annulée.');
-    _groups[index] = group.copyWith(
-      sessions: group.sessions
-          .map((s) => s.id == sessionId ? s.copyWith(status: 'cancelled') : s)
-          .toList(),
-    );
-  }
-
-  Future<void> deleteSession(String sessionId) async {
-    final index = _groups.indexWhere(
-      (g) => g.sessions.any((s) => s.id == sessionId),
-    );
-    if (index < 0) throw Exception('Rencontre introuvable.');
-    final group = _groups[index];
-    final session = group.sessions.firstWhere((s) => s.id == sessionId);
-    if (session.createdBy != _currentProfile.id)
-      throw Exception('Seul le créateur peut supprimer cette rencontre.');
-    if (session.status != 'scheduled' || !session.startTime.isAfter(DateTime.now()))
-      throw Exception('Une rencontre passée ne peut pas être supprimée.');
-    if (session.isConfirmed || session.attendanceStatus != 'pending')
-      throw Exception('Un participant est déjà inscrit. Annulez plutôt la rencontre.');
-    _groups[index] = group.copyWith(
-      sessions: group.sessions.where((s) => s.id != sessionId).toList(),
-    );
-  }
-
-  Future<void> setSessionConfirmation(String sessionId, bool confirmed) async {
-    final index = _groups.indexWhere(
-      (g) => g.sessions.any((s) => s.id == sessionId),
-    );
-    if (index < 0) throw Exception('Rencontre introuvable.');
-    final group = _groups[index];
-    _groups[index] = group.copyWith(
-      sessions: group.sessions
-          .map(
-            (s) => s.id == sessionId ? s.copyWith(isConfirmed: confirmed) : s,
-          )
-          .toList(),
-    );
-  }
-
-  Future<Map<String, dynamic>> recordSessionAttendance(
-    String sessionId,
-    bool attended,
-  ) async {
-    final index = _groups.indexWhere(
-      (g) => g.sessions.any((s) => s.id == sessionId),
-    );
-    if (index < 0) throw Exception('Rencontre introuvable.');
-    final group = _groups[index];
-    final session = group.sessions.firstWhere((s) => s.id == sessionId);
-    if (!session.isEnded || session.attendanceStatus != 'pending')
-      throw Exception('Cette présence ne peut pas être enregistrée.');
-    final delta = session.isConfirmed ? (attended ? 5 : -15) : 0;
-    final score = (_currentProfile.reliabilityScore + delta).clamp(0, 100);
-    _currentProfile = _currentProfile.copyWith(reliabilityScore: score);
-    _groups[index] = group.copyWith(
-      sessions: group.sessions
-          .map(
-            (s) => s.id == sessionId
-                ? s.copyWith(attendanceStatus: attended ? 'attended' : 'absent')
-                : s,
-          )
-          .toList(),
-    );
-    _attendanceHistory.insert(
-      0,
-      AttendanceRecordModel(
-        groupId: group.id,
-        subject: group.subject,
-        topic: session.topic,
-        sessionDate: session.startTime,
-        wasConfirmed: session.isConfirmed,
-        attendanceStatus: attended ? 'attended' : 'absent',
-        scoreImpact: delta,
-        recordedAt: DateTime.now(),
-      ),
-    );
-    return {
-      'success': true,
-      'attended': attended,
-      'score_delta': delta,
-      'new_score': score,
-    };
-  }
-
-  Future<void> updateGroup({
-    required String groupId,
-    required String name,
-    required String iconEmoji,
-    required String subject,
-    required String topic,
-    required String? description,
-    required int capacity,
-  }) async {
-    final index = _groups.indexWhere((g) => g.id == groupId);
-    if (index < 0) throw Exception('Groupe introuvable.');
-    if (_groups[index].creatorId != _currentProfile.id)
-      throw Exception('Seul le créateur peut modifier le groupe.');
-    if (capacity < _groups[index].memberCount)
-      throw Exception(
-        'La limite ne peut pas être inférieure au nombre actuel de membres.',
-      );
-    final g = _groups[index];
-    _groups[index] = StudyGroupModel(
-      id: g.id,
-      creatorId: g.creatorId,
-      name: name.trim(),
-      iconEmoji: iconEmoji,
-      subject: subject,
-      topic: topic.trim(),
-      description: description,
-      capacity: capacity,
-      status: g.status,
-      cohortKey: g.cohortKey,
-      createdAt: g.createdAt,
-      creatorName: g.creatorName,
-      memberCount: g.memberCount,
-      isUserMember: g.isUserMember,
-      sessions: g.sessions,
-    );
   }
 
   Future<void> cancelGroup(String groupId) async {

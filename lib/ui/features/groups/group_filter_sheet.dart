@@ -46,13 +46,8 @@ class FilterCriteria {
 
 class GroupFilterSheet extends StatefulWidget {
   final FilterCriteria currentCriteria;
-  final bool lockUserGroupsOnly;
 
-  const GroupFilterSheet({
-    super.key,
-    required this.currentCriteria,
-    this.lockUserGroupsOnly = false,
-  });
+  const GroupFilterSheet({super.key, required this.currentCriteria});
 
   @override
   State<GroupFilterSheet> createState() => _GroupFilterSheetState();
@@ -123,7 +118,7 @@ class _GroupFilterSheetState extends State<GroupFilterSheet> {
                       _selectedSubject = null;
                       _selectedDate = null;
                       _availableOnly = false;
-                      _userGroupsOnly = widget.lockUserGroupsOnly;
+                      _userGroupsOnly = false;
                     });
                   },
                   child: const Text('Réinitialiser'),
@@ -254,25 +249,24 @@ class _GroupFilterSheetState extends State<GroupFilterSheet> {
             ),
 
             // Toggle User Groups Only
-            if (!widget.lockUserGroupsOnly)
-              SwitchListTile.adaptive(
-                contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'Mes groupes uniquement',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                ),
-                subtitle: const Text(
-                  'Groupes créés ou rejoints',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                ),
-                value: _userGroupsOnly,
-                activeTrackColor: AppTheme.tealAccent,
-                onChanged: (val) {
-                  setState(() {
-                    _userGroupsOnly = val;
-                  });
-                },
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text(
+                'Mes groupes uniquement',
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
               ),
+              subtitle: const Text(
+                'Groupes créés ou rejoints',
+                style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+              ),
+              value: _userGroupsOnly,
+              activeTrackColor: AppTheme.tealAccent,
+              onChanged: (val) {
+                setState(() {
+                  _userGroupsOnly = val;
+                });
+              },
+            ),
             const SizedBox(height: 20),
 
             // Apply Button
@@ -283,7 +277,7 @@ class _GroupFilterSheetState extends State<GroupFilterSheet> {
                   topicQuery: widget.currentCriteria.topicQuery,
                   date: _selectedDate,
                   availableOnly: _availableOnly,
-                  userGroupsOnly: widget.lockUserGroupsOnly || _userGroupsOnly,
+                  userGroupsOnly: _userGroupsOnly,
                 );
                 Navigator.of(context).pop(newCriteria);
               },

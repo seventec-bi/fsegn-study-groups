@@ -5,7 +5,6 @@ import '../../../data/models/study_group_model.dart';
 import '../../../data/repositories/group_repository.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
-import '../../core/group_icon.dart';
 import 'group_filter_sheet.dart';
 import 'group_detail_screen.dart';
 import 'create_group_screen.dart';
@@ -56,8 +55,7 @@ class _GroupListScreenState extends State<GroupListScreen> {
             : _searchController.text.trim(),
         date: _criteria.date,
         availableOnly: _criteria.availableOnly,
-        userGroupsOnly:
-            widget.initialUserGroupsOnly || _criteria.userGroupsOnly,
+        userGroupsOnly: _criteria.userGroupsOnly,
       );
       if (mounted) {
         setState(() {
@@ -84,10 +82,7 @@ class _GroupListScreenState extends State<GroupListScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => GroupFilterSheet(
-        currentCriteria: _criteria,
-        lockUserGroupsOnly: widget.initialUserGroupsOnly,
-      ),
+      builder: (_) => GroupFilterSheet(currentCriteria: _criteria),
     );
 
     if (updated != null) {
@@ -129,7 +124,7 @@ class _GroupListScreenState extends State<GroupListScreen> {
                       child: TextField(
                         controller: _searchController,
                         decoration: InputDecoration(
-                          hintText: 'Rechercher un groupe, une matière ou un sujet...',
+                          hintText: 'Rechercher un chapitre ou sujet...',
                           prefixIcon: const Icon(Icons.search, size: 20),
                           suffixIcon: _searchController.text.isNotEmpty
                               ? IconButton(
@@ -237,9 +232,7 @@ class _GroupListScreenState extends State<GroupListScreen> {
                   InkWell(
                     onTap: () {
                       setState(() {
-                        _criteria = FilterCriteria(
-                          userGroupsOnly: widget.initialUserGroupsOnly,
-                        );
+                        _criteria = const FilterCriteria();
                         _searchController.clear();
                       });
                       _loadGroups();
@@ -291,12 +284,8 @@ class _GroupListScreenState extends State<GroupListScreen> {
                     child: _groups.isEmpty
                         ? UiHelpers.buildEmptyState(
                             icon: Icons.search_off_rounded,
-                            title: widget.initialUserGroupsOnly
-                                ? 'Vous n’avez rejoint aucun groupe'
-                                : 'Aucun groupe d’étude trouvé',
-                            description: widget.initialUserGroupsOnly
-                                ? 'Les groupes que vous créez ou rejoignez apparaîtront ici.'
-                                : _criteria.hasActiveFilters
+                            title: 'Aucun groupe d’étude trouvé',
+                            description: _criteria.hasActiveFilters
                                 ? 'Aucun groupe ne correspond à vos filtres. Essayez de réinitialiser la recherche.'
                                 : 'Soyez le premier à créer un groupe d’étude pour votre promo FSEGN L1 !',
                             buttonText: 'Créer un groupe',
@@ -348,7 +337,6 @@ class _GroupCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final session = group.nextSession;
     return Card(
       child: InkWell(
         onTap: onTap,
@@ -358,146 +346,98 @@ class _GroupCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Human first: group identity, then subject and activity.
+              // Subject tag & user status badge
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  GroupIcon(emoji: group.iconEmoji, size: 50),
-                  const SizedBox(width: 12),
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          group.name,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w800,
-                            color: AppTheme.primaryNavy,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          group.subject,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppTheme.tealAccent,
-                          ),
-                        ),
-                      ],
+                    child: Text(
+                      group.subject,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.tealAccent,
+                        letterSpacing: 0.2,
+                      ),
                     ),
                   ),
                   if (group.isUserMember)
-                    const Icon(
-                      Icons.check_circle,
-                      size: 18,
-                      color: AppTheme.alertSuccess,
+                    UiHelpers.buildBadge(
+                      text: group.isUserConfirmed ? 'Confirmé' : 'Inscrit',
+                      color: group.isUserConfirmed
+                          ? AppTheme.alertSuccess
+                          : AppTheme.tealAccent,
+                      icon: group.isUserConfirmed
+                          ? Icons.check_circle
+                          : Icons.person,
+                    )
+                  else if (group.isFull)
+                    UiHelpers.buildBadge(
+                      text: 'Complet',
+                      color: AppTheme.alertError,
                     ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 6),
+
+              // Free-text Topic (prominent)
               Text(
                 group.topic,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textDark,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppTheme.primaryNavy,
                   height: 1.25,
                 ),
               ),
-              const SizedBox(height: 12),
-              if (session != null) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.tealLight.withAlpha(140),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.handshake_outlined,
-                        size: 16,
-                        color: AppTheme.tealAccent,
-                      ),
-                      const SizedBox(width: 7),
-                      Expanded(
-                        child: Text(
-                          'Prochaine rencontre · ${UiHelpers.formatDate(session.startTime)} · ${session.meetingLocation}',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppTheme.textDark,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ] else if (group.legacyStartTime != null) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.tealLight.withAlpha(140),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    'Rencontre prévue · ${UiHelpers.formatDate(group.startTime)} · ${group.meetingLocation}',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textDark,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-              ] else ...[
-                const Text(
-                  'Discussions et entraide au quotidien',
-                  style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
-                ),
-                const SizedBox(height: 10),
-              ],
+              const SizedBox(height: 10),
+
+              // Date, Time & Location
               Row(
                 children: [
-                  Icon(
-                    Icons.people_alt_outlined,
-                    size: 16,
+                  const Icon(
+                    Icons.access_time,
+                    size: 15,
                     color: AppTheme.textMuted,
                   ),
-                  const SizedBox(width: 5),
+                  const SizedBox(width: 6),
                   Text(
-                    '${group.memberCount} / ${group.capacity} membres',
+                    '${UiHelpers.formatDate(group.startTime)} • ${UiHelpers.formatTimeRange(group.startTime, group.endTime)}',
                     style: const TextStyle(
                       fontSize: 12,
+                      fontWeight: FontWeight.w500,
                       color: AppTheme.textDark,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    group.isUserMember ? 'Ouvrir le groupe' : 'Découvrir',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.tealAccent,
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 5),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.place_outlined,
+                    size: 15,
+                    color: AppTheme.textMuted,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      group.meetingLocation,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textDark,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              // Capacity Progress Indicator
+              UiHelpers.buildCapacityBar(
+                memberCount: group.memberCount,
+                capacity: group.capacity,
               ),
             ],
           ),

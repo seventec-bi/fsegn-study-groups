@@ -1,251 +1,452 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../core/constants/subjects.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/group_repository.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
-import '../../core/group_icon.dart';
-import 'create_session_screen.dart';
 
 class CreateGroupScreen extends StatefulWidget {
-  final bool scheduleFirstSession;
-  const CreateGroupScreen({super.key, this.scheduleFirstSession = false});
+  const CreateGroupScreen({super.key});
+
   @override
   State<CreateGroupScreen> createState() => _CreateGroupScreenState();
 }
 
 class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
-  final _topic = TextEditingController();
-  final _description = TextEditingController();
-  String? _subject;
-  String _iconEmoji = '📚';
-  int _capacity = 8;
-  bool _loading = false;
-  String? _error;
+
+  String? _selectedSubject;
+  final _topicController = TextEditingController();
+  final _locationController = TextEditingController();
+  final _descriptionController = TextEditingController();
+
+  DateTime _startDate = DateTime.now().add(const Duration(days: 1));
+  TimeOfDay _startTime = const TimeOfDay(hour: 10, minute: 0);
+  TimeOfDay _endTime = const TimeOfDay(hour: 12, minute: 0);
+  int _capacity = 5;
+
+  bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
-    _name.dispose();
-    _topic.dispose();
-    _description.dispose();
+    _topicController.dispose();
+    _locationController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
-  Future<void> _create() async {
+  DateTime _combineDateTime(DateTime date, TimeOfDay time) {
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
+  Future<void> _pickStartDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _startDate.isBefore(now) ? now : _startDate,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 90)),
+    );
+    if (picked != null) {
+      setState(() {
+        _startDate = picked;
+      });
+    }
+  }
+
+  Future<void> _pickStartTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime,
+    );
+    if (picked != null) {
+      setState(() {
+        _startTime = picked;
+        // Adjust end time to be at least 1 hour later
+        final startM = picked.hour * 60 + picked.minute;
+        final endM = _endTime.hour * 60 + _endTime.minute;
+        if (endM <= startM) {
+          final newEndHour = (picked.hour + 1) % 24;
+          _endTime = TimeOfDay(hour: newEndHour, minute: picked.minute);
+        }
+      });
+    }
+  }
+
+  Future<void> _pickEndTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _endTime,
+    );
+    if (picked != null) {
+      setState(() {
+        _endTime = picked;
+      });
+    }
+  }
+
+  Future<void> _handleSubmit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_subject == null) {
-      setState(() => _error = 'Choisissez une matière pour votre groupe.');
+
+    if (_selectedSubject == null) {
+      setState(() {
+        _errorMessage =
+            'Veuillez sélectionner une matière de l’emploi du temps.';
+      });
       return;
     }
+
+    final fullStart = _combineDateTime(_startDate, _startTime);
+    final fullEnd = _combineDateTime(_startDate, _endTime);
+
+    if (fullStart.isBefore(DateTime.now())) {
+      setState(() {
+        _errorMessage = 'La date de début doit être dans le futur.';
+      });
+      return;
+    }
+
+    if (!fullEnd.isAfter(fullStart)) {
+      setState(() {
+        _errorMessage =
+            'L’heure de fin doit être postérieure à l’heure de début.';
+      });
+      return;
+    }
+
     setState(() {
-      _loading = true;
-      _error = null;
+      _isLoading = true;
+      _errorMessage = null;
     });
+
     try {
-      final group = await GroupRepository.instance.createGroup(
-        name: _name.text.trim(),
-        iconEmoji: _iconEmoji,
-        subject: _subject!,
-        topic: _topic.text.trim(),
-        description: _description.text.trim().isEmpty
+      await GroupRepository.instance.createGroup(
+        subject: _selectedSubject!,
+        topic: _topicController.text.trim(),
+        meetingLocation: _locationController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty
             ? null
-            : _description.text.trim(),
+            : _descriptionController.text.trim(),
+        startTime: fullStart,
+        endTime: fullEnd,
         capacity: _capacity,
       );
-      var sessionCreated = false;
-      if (widget.scheduleFirstSession && mounted) {
-        sessionCreated =
-            await Navigator.of(context).push<bool>(
-              MaterialPageRoute(
-                builder: (_) => CreateSessionScreen(
-                  groupId: group.id,
-                  groupTopic: group.topic,
-                ),
-              ),
-            ) ??
-            false;
-      }
+
       if (mounted) {
-        UiHelpers.showSnackBar(
-          context,
-          widget.scheduleFirstSession && !sessionCreated
-              ? 'Groupe créé. Vous pourrez proposer une rencontre plus tard.'
-              : 'Votre groupe est prêt !',
-        );
+        UiHelpers.showSnackBar(context, 'Groupe d’étude créé avec succès !');
         Navigator.of(context).pop(true);
       }
     } catch (e) {
-      if (mounted)
-        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+      setState(() {
+        _errorMessage = e.toString().replaceAll('Exception: ', '');
+      });
     } finally {
-      if (mounted) setState(() => _loading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
-  Widget build(BuildContext context) => ResponsiveScaffold(
-    appBar: AppBar(title: const Text('Créer un groupe')),
-    body: Form(
-      key: _formKey,
-      child: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          const Text(
-            'Un espace pour vos cours et vos camarades.',
-            style: TextStyle(fontSize: 16, color: AppTheme.textMuted),
-          ),
-          const SizedBox(height: 20),
-          if (_error != null) ...[
-            Text(_error!, style: const TextStyle(color: AppTheme.alertError)),
-            const SizedBox(height: 12),
-          ],
-          const Text(
-            'Nom du groupe',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          TextFormField(
-            controller: _name,
-            maxLength: 80,
-            decoration: const InputDecoration(
-              hintText: 'ex. Les as de l’algorithmique',
-              prefixIcon: Icon(Icons.groups_2_outlined),
-            ),
-            validator: (v) => v == null || v.trim().length < 2
-                ? 'Ajoutez un nom de 2 caractères minimum.'
-                : null,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Choisissez une icône',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 8),
-          GroupIconPicker(
-            selected: _iconEmoji,
-            onSelected: (emoji) => setState(() => _iconEmoji = emoji),
-          ),
-          const SizedBox(height: 12),
-          const Text('Matière', style: TextStyle(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 6),
-          DropdownButtonFormField<String>(
-            initialValue: _subject,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              hintText: 'Choisir un cours',
-              prefixIcon: Icon(Icons.menu_book_outlined),
-            ),
-            items: Subjects.list
-                .map(
-                  (s) => DropdownMenuItem(
+  Widget build(BuildContext context) {
+    final fullStart = _combineDateTime(_startDate, _startTime);
+    final fullEnd = _combineDateTime(_startDate, _endTime);
+
+    return ResponsiveScaffold(
+      appBar: AppBar(title: const Text('Créer un groupe d’étude')),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_errorMessage != null) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.alertError.withAlpha(20),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppTheme.alertError.withAlpha(80),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.error_outline,
+                        color: AppTheme.alertError,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: AppTheme.alertError,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // 1. Subject Dropdown
+              const Text(
+                'Matière *',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.primaryNavy,
+                ),
+              ),
+              const SizedBox(height: 6),
+              DropdownButtonFormField<String>(
+                initialValue: _selectedSubject,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  hintText: 'Sélectionner la matière (12 cours L1)',
+                  prefixIcon: Icon(Icons.menu_book, size: 20),
+                ),
+                items: Subjects.list.map((s) {
+                  return DropdownMenuItem(
                     value: s,
                     child: Text(s, overflow: TextOverflow.ellipsis),
-                  ),
-                )
-                .toList(),
-            onChanged: (v) => setState(() => _subject = v),
-            validator: (v) => v == null ? 'Choisissez une matière.' : null,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Qu’est-ce que vous étudiez ?',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          TextFormField(
-            controller: _topic,
-            maxLength: 150,
-            decoration: const InputDecoration(
-              hintText: 'ex. Pointeurs, listes chaînées et exercices',
-            ),
-            validator: (v) => v == null || v.trim().length < 2
-                ? 'Décrivez le sujet du groupe.'
-                : null,
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Quelques mots pour accueillir les membres (facultatif)',
-            style: TextStyle(fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 6),
-          TextFormField(
-            controller: _description,
-            maxLength: 400,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Notes, exercices, entraide…',
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Limite de membres',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    Text(
-                      'Vous pourrez l’ajuster plus tard.',
-                      style: TextStyle(color: AppTheme.textMuted, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: _capacity > 2
-                    ? () => setState(() => _capacity--)
+                  );
+                }).toList(),
+                onChanged: (val) {
+                  setState(() {
+                    _selectedSubject = val;
+                  });
+                },
+                validator: (val) => val == null
+                    ? 'Veuillez choisir une matière de l’emploi du temps.'
                     : null,
-                icon: const Icon(Icons.remove_circle_outline),
               ),
-              Text(
-                '$_capacity',
-                style: const TextStyle(
+              const SizedBox(height: 16),
+
+              // 2. Free-text Chapter / Topic
+              const Text(
+                'Chapitre / Sujet libre de révision *',
+                style: TextStyle(
+                  fontSize: 14,
                   fontWeight: FontWeight.w700,
-                  fontSize: 17,
+                  color: AppTheme.primaryNavy,
                 ),
               ),
-              IconButton(
-                onPressed: _capacity < 20
-                    ? () => setState(() => _capacity++)
-                    : null,
-                icon: const Icon(Icons.add_circle_outline),
+              const SizedBox(height: 4),
+              const Text(
+                'Indiquez précisément le chapitre, les exercices ou le projet à travailler.',
+                style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
               ),
+              const SizedBox(height: 6),
+              TextFormField(
+                controller: _topicController,
+                maxLength: 120,
+                decoration: const InputDecoration(
+                  hintText: 'ex. Chapitre 4 : Arbres binaires & Récursivité',
+                  prefixIcon: Icon(Icons.edit_note, size: 20),
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Veuillez indiquer le chapitre ou sujet de révision.';
+                  }
+                  if (val.trim().length < 3) {
+                    return 'Le sujet doit comporter au moins 3 caractères.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // 3. Meeting Location
+              const Text(
+                'Lieu de rencontre en présentiel *',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.primaryNavy,
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextFormField(
+                controller: _locationController,
+                maxLength: 80,
+                decoration: const InputDecoration(
+                  hintText: 'ex. Bibliothèque FSEGN - Salle de travail 2',
+                  prefixIcon: Icon(Icons.place_outlined, size: 20),
+                ),
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) {
+                    return 'Veuillez préciser le lieu sur le campus.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 14),
+
+              // 4. Date and Time
+              const Text(
+                'Date et Horaires *',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.primaryNavy,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickStartDate,
+                      icon: const Icon(Icons.calendar_month, size: 18),
+                      label: Text(
+                        DateFormat('EEE d MMM', 'fr_FR').format(_startDate),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickStartTime,
+                      icon: const Icon(Icons.access_time, size: 18),
+                      label: Text(_startTime.format(context)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickEndTime,
+                      icon: const Icon(Icons.timelapse, size: 18),
+                      label: Text(_endTime.format(context)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Créneau prévu : ${DateFormat('EEEE d MMMM y', 'fr_FR').format(fullStart)} de ${UiHelpers.formatTimeRange(fullStart, fullEnd)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.tealAccent,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 18),
+
+              // 5. Capacity Stepper (2 to 20)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Capacité maximale',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.primaryNavy,
+                        ),
+                      ),
+                      Text(
+                        '$_capacity étudiants (vous inclus)',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.textMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      IconButton.filledTonal(
+                        onPressed: _capacity > 2
+                            ? () {
+                                setState(() {
+                                  _capacity--;
+                                });
+                              }
+                            : null,
+                        icon: const Icon(Icons.remove, size: 18),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Text(
+                          '$_capacity',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primaryNavy,
+                          ),
+                        ),
+                      ),
+                      IconButton.filledTonal(
+                        onPressed: _capacity < 20
+                            ? () {
+                                setState(() {
+                                  _capacity++;
+                                });
+                              }
+                            : null,
+                        icon: const Icon(Icons.add, size: 18),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // 6. Optional Description
+              const Text(
+                'Description / Consignes (Optionnel)',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: AppTheme.primaryNavy,
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextFormField(
+                controller: _descriptionController,
+                maxLines: 3,
+                maxLength: 400,
+                decoration: const InputDecoration(
+                  hintText:
+                      'ex. Ramenez vos notes de cours et un ordi portable si possible.',
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Submit Button
+              ElevatedButton.icon(
+                onPressed: _isLoading ? null : _handleSubmit,
+                icon: _isLoading
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.check_circle_outline, size: 20),
+                label: const Text('Publier le groupe d’étude'),
+              ),
+              const SizedBox(height: 16),
             ],
           ),
-          const SizedBox(height: 20),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppTheme.tealLight,
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Text(
-              'Votre groupe reste ouvert pour discuter des cours. Vous pourrez proposer une rencontre en présentiel quand vous voulez, puis en organiser une autre dans le même groupe.',
-              style: TextStyle(height: 1.4),
-            ),
-          ),
-          const SizedBox(height: 20),
-          ElevatedButton.icon(
-            onPressed: _loading ? null : _create,
-            icon: _loading
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Icon(Icons.favorite_border),
-            label: const Text('Créer mon groupe'),
-          ),
-        ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

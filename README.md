@@ -1,8 +1,8 @@
 # FSEGN Study Groups (Beta Étudiante)
 
-> Application multiplateforme conçue pour les étudiants de **1ère année Licence Informatique de Gestion (Business Computing)** à la **Faculté des Sciences Économiques et de Gestion de Nabeul (FSEGN)**, **Université de Carthage**, Tunisie.
+> Application mobile multiplateforme (Android & iOS) conçue pour les étudiants de **1ère année Licence Informatique de Gestion (Business Computing)** à la **Faculté des Sciences Économiques et de Gestion de Nabeul (FSEGN)**, **Université de Carthage**, Tunisie.
 
-L’application permet aux étudiants de créer des communautés d’étude durables autour de leurs cours, échanger dans un chat commun et planifier plusieurs rencontres en présentiel au fil du temps. Chaque rencontre garde son horaire, son lieu et son suivi de présence sans fermer le groupe ni sa conversation.
+L’application permet aux étudiants de créer, trouver, rejoindre et organiser des groupes d’étude en présentiel sur le campus pour leurs 12 matières d’emploi du temps, avec saisie libre du chapitre/sujet, messagerie instantanée de groupe et un système d’assiduité basé sur l’honneur étudiant.
 
 ---
 
@@ -18,7 +18,6 @@ L’application permet aux étudiants de créer des communautés d’étude dura
 8. [Guide de Test & Smoke-Test Checklist](#guide-de-test--smoke-test-checklist)
 9. [Sécurité, Confidentialité & Règles Métier](#sécurité-confidentialité--règles-métier)
 10. [Évolutivité du Modèle](#évolutivité-du-modèle)
-11. [Groupes durables et rencontres répétées](#groupes-durables-et-rencontres-répétées)
 
 ---
 
@@ -131,16 +130,15 @@ Pour connecter votre propre instance Supabase :
 1. Rendez-vous sur [supabase.com](https://supabase.com) et créez un compte gratuit.
 2. Créez un nouveau projet (ex: `fsegn-study-groups`, région `eu-central-1` ou la plus proche de la Tunisie).
 
-### Étape 2 : Exécuter les migrations SQL dans l’ordre
+### Étape 2 : Exécuter le script de migration SQL
 1. Dans le Dashboard Supabase, ouvrez l'onglet **SQL Editor** dans le menu de gauche.
 2. Cliquez sur **New query**.
-3. Exécutez chaque fichier de `supabase/migrations/` dans l’ordre chronologique, en commençant par :
+3. Copiez l'intégralité du fichier :
    ```text
    supabase/migrations/20261018_initial_schema.sql
    ```
-4. Collez chaque fichier dans une nouvelle requête et cliquez sur **Run** avant de passer au suivant.
-5. Les migrations `20261031133304_persistent_groups_and_sessions.sql`, `20261031134645_group_icons.sql` et `20261031140258_manage_study_sessions.sql` transforment les groupes existants en communautés durables, remplacent les photos de groupe par des icônes et ajoutent la gestion sécurisée des rencontres.
-6. Les premières migrations créent automatiquement :
+4. Collez-le dans l'éditeur SQL et cliquez sur **Run**.
+5. Ce script crée automatiquement :
    - La table `profiles` sécurisée (sans stockage d'email).
    - La table `study_groups` avec contrainte sur les 12 matières.
    - La table `group_members` avec vérification transactionnelle de capacité.
@@ -206,11 +204,11 @@ Pour valider le fonctionnement complet de l'application, suivez cette checklist 
 
 ### 3. Création d'un Groupe d'Étude
 - [ ] Cliquez sur le bouton flottant **« Nouveau groupe »**.
-- [ ] Choisissez le nom, une icône emoji, la matière, le sujet et la limite de membres.
-- [ ] Publiez le groupe sans devoir choisir une date ni un lieu.
-- [ ] Vérifiez que le créateur est inscrit comme premier membre.
-- [ ] Depuis le groupe, proposez une rencontre en présentiel; elle apparaît dans la liste des rencontres du groupe.
-- [ ] Après une rencontre terminée, vérifiez que le même groupe et son chat restent disponibles et qu'une autre rencontre peut être ajoutée.
+- [ ] Sélectionnez une matière dans la liste déroulante des 12 cours.
+- [ ] Renseignez un chapitre libre (ex: *« Chapitre 4 : Arbres binaires »*).
+- [ ] Indiquez le lieu sur le campus (ex: *« Bibliothèque FSEGN - Salle 3 »*).
+- [ ] Définissez un horaire début/fin futur.
+- [ ] Publiez le groupe : le créateur est automatiquement inscrit comme membre avec présence **non confirmée par défaut**.
 
 ### 4. Rejoindre un Groupe & Capacité
 - [ ] Ouvrez un groupe ayant des places disponibles.
@@ -219,9 +217,9 @@ Pour valider le fonctionnement complet de l'application, suivez cette checklist 
 - [ ] **Contrôle de saturation** : Vérifiez qu'un groupe plein (ex: le groupe Statistique 4/4) affiche *« Complet »* et empêche toute nouvelle inscription.
 
 ### 5. Confirmation de Présence & Assiduité
-- [ ] **Avant une rencontre** : Cliquez sur **« Je serai là »** (la confirmation passe au vert).
+- [ ] **Avant la séance** : Cliquez sur **« Confirmer ma présence »** (le badge passe au vert).
 - [ ] **Annulation** : Vous pouvez annuler la confirmation avant le début de la séance.
-- [ ] **Après la rencontre** : Pour une rencontre terminée, cliquez sur **« Déclarer ma présence »**.
+- [ ] **Après la séance** : Pour une séance terminée (ex: le groupe de test *Comptabilité générale*), cliquez sur **« Déclarer ma présence »**.
 - [ ] **Calcul du score** : Déclarez votre présence (+5 pts) ou absence (-15 pts). Vérifiez que le score de fiabilité s'ajuste et reste plafonné entre 0% et 100%.
 - [ ] **Idempotence** : Vérifiez qu'il est impossible de soumettre deux fois son assiduité pour la même séance.
 - [ ] **Transparence** : Vérifiez l'affichage de la mention du système d’honneur dans la boîte de dialogue et l'historique d'assiduité.
@@ -265,11 +263,3 @@ Le modèle de données PostgreSQL et les classes de domaine Dart incluent déjà
 - `cohort_key` (par défaut `'fsegn_l1_bc'`)
 
 Pour ouvrir l'application à la 2ème année (L2), 3ème année (L3), ou à d'autres facultés partenaires (ex: FSEG Mahdia, ISG Tunis, ESCT), il suffit d'ajouter leurs matières et de paramétrer le sélecteur de cohorte sans modifier la structure des tables ni les politiques RLS.
-
-## Groupes durables et rencontres répétées
-
-Un groupe représente maintenant un espace de discussion durable : nom, icône emoji, matière, sujet de travail, description et limite de membres. Il n’exige ni horaire ni lieu lors de sa création. Les membres gardent le même chat d’une semaine à l’autre.
-
-Les rencontres en présentiel sont enregistrées séparément dans `study_sessions`. Un groupe peut en organiser plusieurs; chaque rencontre garde son propre sujet, lieu, horaire, participants et suivi de présence. La migration `supabase/migrations/20261031133304_persistent_groups_and_sessions.sql` ajoute ce modèle et transforme chaque ancienne séance planifiée en première rencontre, en conservant les identifiants de groupe, les conversations et les adhésions existantes.
-
-L’accueil met en avant les rencontres à venir et permet de rejoindre une rencontre ou d’en proposer une dans un groupe existant ou nouveau. Le créateur d’une rencontre future peut la modifier, l’annuler ou la supprimer. La suppression est refusée si des membres se sont inscrits ou si un historique de présence existe; l’annulation conserve alors l’historique.

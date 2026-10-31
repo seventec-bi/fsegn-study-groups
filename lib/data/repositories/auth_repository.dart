@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/env/app_config.dart';
 import '../models/profile_model.dart';
 import '../services/supabase_service.dart';
-import '../services/media_storage_service.dart';
 import '../services/local_demo_service.dart';
 
 class AuthRepository extends ChangeNotifier {
@@ -140,23 +139,6 @@ class AuthRepository extends ChangeNotifier {
     return _currentProfile;
   }
 
-  /// Loads the student-visible fields only. Email always stays in Supabase Auth.
-  Future<ProfileModel?> getPublicProfile(String studentId) async {
-    if (AppConfig.isDemoMode) {
-      return LocalDemoService.instance.getStudentProfile(studentId);
-    }
-
-    final data = await SupabaseService.client
-        .from('profiles')
-        .select('''
-          id, display_name, bio, university, faculty, licence_year,
-          specialty, reliability_score, created_at, avatar_path
-        ''')
-        .eq('id', studentId)
-        .maybeSingle();
-    return data == null ? null : ProfileModel.fromJson(data);
-  }
-
   Future<void> updateProfile({required String displayName, String? bio}) async {
     if (AppConfig.isDemoMode) {
       await LocalDemoService.instance.updateProfile(
@@ -214,10 +196,13 @@ class AuthRepository extends ChangeNotifier {
     final path = '$uid/${DateTime.now().microsecondsSinceEpoch}.$safeExtension';
     final previousPath = _currentProfile?.avatarPath;
 
-    await MediaStorageService.instance.upload(
-      key: path,
-      bytes: bytes,
-      contentType: contentType,
+    await SupabaseService.client.storage.from('student-avatars').uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(
+        upsert: false,
+        contentType: contentType,
+      ),
     );
 
     try {
@@ -231,7 +216,9 @@ class AuthRepository extends ChangeNotifier {
       );
       if (previousPath != null && previousPath != path) {
         try {
-          await MediaStorageService.instance.delete(previousPath);
+          await SupabaseService.client.storage
+              .from('student-avatars')
+              .remove([previousPath]);
         } catch (_) {
           // A stale old image is harmless if cleanup is denied or unavailable.
         }
@@ -239,7 +226,9 @@ class AuthRepository extends ChangeNotifier {
       await loadProfile();
     } catch (_) {
       try {
-        await MediaStorageService.instance.delete(path);
+        await SupabaseService.client.storage
+            .from('student-avatars')
+            .remove([path]);
       } catch (_) {}
       rethrow;
     }

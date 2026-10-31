@@ -36,52 +36,6 @@ class AttendanceRepository extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setSessionConfirmation(String sessionId, bool confirmed) async {
-    if (AppConfig.isDemoMode) {
-      await LocalDemoService.instance.setSessionConfirmation(
-        sessionId,
-        confirmed,
-      );
-      notifyListeners();
-      return;
-    }
-    final res = await SupabaseService.client.rpc(
-      'set_study_session_confirmation',
-      params: {'p_session_id': sessionId, 'p_confirmed': confirmed},
-    );
-    if (res is Map && res['success'] != true)
-      throw Exception(
-        res['message'] ?? 'Impossible de modifier la confirmation.',
-      );
-    notifyListeners();
-  }
-
-  Future<Map<String, dynamic>> recordSessionAttendance(
-    String sessionId,
-    bool attended,
-  ) async {
-    if (AppConfig.isDemoMode) {
-      final result = await LocalDemoService.instance.recordSessionAttendance(
-        sessionId,
-        attended,
-      );
-      await AuthRepository.instance.loadProfile();
-      notifyListeners();
-      return result;
-    }
-    final res = await SupabaseService.client.rpc(
-      'record_study_session_attendance',
-      params: {'p_session_id': sessionId, 'p_attended': attended},
-    );
-    if (res is Map && res['success'] != true)
-      throw Exception(
-        res['message'] ?? 'Impossible d’enregistrer la présence.',
-      );
-    await AuthRepository.instance.loadProfile();
-    notifyListeners();
-    return Map<String, dynamic>.from(res as Map);
-  }
-
   /// DIRECTIVE #4: Idempotent post-session attendance recording.
   /// Prevents double scoring and clamps score between 0 and 100.
   Future<Map<String, dynamic>> recordAttendance(
@@ -125,19 +79,17 @@ class AttendanceRepository extends ChangeNotifier {
     if (uid == null) return [];
 
     final data = await SupabaseService.client
-        .from('study_session_members')
+        .from('group_members')
         .select('''
-          attendance_confirmed, attendance_status, attendance_recorded_at, session_id,
-          study_sessions!study_session_members_session_id_fkey(id, group_id, topic, start_time,
-            study_groups!study_sessions_group_id_fkey(subject))
+          attendance_confirmed, attendance_status, attendance_recorded_at,
+          study_groups!group_members_group_id_fkey(id, subject, topic, start_time)
         ''')
         .eq('user_id', uid)
         .neq('attendance_status', 'pending')
-        .order('attendance_recorded_at', ascending: false);
+        .order('joined_at', ascending: false);
 
     return (data as List<dynamic>).map((item) {
-      final s = item['study_sessions'] as Map<String, dynamic>;
-      final g = s['study_groups'] as Map<String, dynamic>;
+      final g = item['study_groups'] as Map<String, dynamic>;
       final confirmed = item['attendance_confirmed'] as bool? ?? false;
       final status = item['attendance_status'] as String? ?? 'unconfirmed';
 
@@ -151,10 +103,10 @@ class AttendanceRepository extends ChangeNotifier {
       }
 
       return AttendanceRecordModel(
-        groupId: s['group_id'] as String,
+        groupId: g['id'] as String,
         subject: g['subject'] as String,
-        topic: s['topic'] as String,
-        sessionDate: DateTime.parse(s['start_time'] as String),
+        topic: g['topic'] as String,
+        sessionDate: DateTime.parse(g['start_time'] as String),
         wasConfirmed: confirmed,
         attendanceStatus: status,
         scoreImpact: delta,

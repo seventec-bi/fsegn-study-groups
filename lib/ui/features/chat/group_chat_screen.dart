@@ -5,10 +5,9 @@ import '../../../core/theme/app_theme.dart';
 import '../../../data/models/group_message_model.dart';
 import '../../../data/repositories/chat_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
+import '../../../data/services/supabase_service.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
-import '../../core/student_avatar.dart';
-import '../profile/student_profile_screen.dart';
 
 class GroupChatScreen extends StatefulWidget {
   final String groupId;
@@ -53,25 +52,23 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
       _isLoading = true;
       _errorMessage = null;
     });
-    _subscription = ChatRepository.instance
-        .streamMessages(widget.groupId)
-        .listen(
-          (list) {
-            if (!mounted) return;
-            setState(() {
-              _messages = list;
-              _isLoading = false;
-            });
-            _scrollToBottom();
-          },
-          onError: (err) {
-            if (!mounted) return;
-            setState(() {
-              _errorMessage = err.toString();
-              _isLoading = false;
-            });
-          },
-        );
+    _subscription = ChatRepository.instance.streamMessages(widget.groupId).listen(
+      (list) {
+        if (!mounted) return;
+        setState(() {
+          _messages = list;
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      },
+      onError: (err) {
+        if (!mounted) return;
+        setState(() {
+          _errorMessage = err.toString();
+          _isLoading = false;
+        });
+      },
+    );
   }
 
   Future<void> _manualRefresh() async {
@@ -205,63 +202,63 @@ class _GroupChatScreenState extends State<GroupChatScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _messages.isEmpty
-                ? UiHelpers.buildEmptyState(
-                    icon: Icons.forum_outlined,
-                    title: 'La discussion commence ici',
-                    description:
-                        'Présentez-vous et partagez vos questions avec le groupe.',
-                  )
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.fromLTRB(12, 16, 12, 18),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, index) {
-                      final msg = _messages[index];
-                      final isMe = msg.senderId == currentUserId;
-                      final continues = _continuesFromPrevious(index);
-                      final showDate =
-                          index == 0 ||
-                          !_sameDay(
-                            msg.createdAt,
-                            _messages[index - 1].createdAt,
-                          );
-                      return Column(
-                        children: [
-                          if (showDate)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                              child: DecoratedBox(
-                                decoration: BoxDecoration(
-                                  color: AppTheme.primaryNavy.withAlpha(18),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                                child: Padding(
+                    ? UiHelpers.buildEmptyState(
+                        icon: Icons.forum_outlined,
+                        title: 'La discussion commence ici',
+                        description:
+                            'Présentez-vous et partagez vos questions avec le groupe.',
+                      )
+                    : ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.fromLTRB(12, 16, 12, 18),
+                        itemCount: _messages.length,
+                        itemBuilder: (context, index) {
+                          final msg = _messages[index];
+                          final isMe = msg.senderId == currentUserId;
+                          final continues = _continuesFromPrevious(index);
+                          final showDate = index == 0 ||
+                              !_sameDay(
+                                msg.createdAt,
+                                _messages[index - 1].createdAt,
+                              );
+                          return Column(
+                            children: [
+                              if (showDate)
+                                Padding(
                                   padding: const EdgeInsets.symmetric(
-                                    horizontal: 12,
-                                    vertical: 5,
+                                    vertical: 12,
                                   ),
-                                  child: Text(
-                                    DateFormat(
-                                      'dd/MM/yyyy',
-                                    ).format(msg.createdAt.toLocal()),
-                                    style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppTheme.primaryNavy,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: AppTheme.primaryNavy.withAlpha(18),
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 5,
+                                      ),
+                                      child: Text(
+                                        DateFormat('dd/MM/yyyy')
+                                            .format(msg.createdAt.toLocal()),
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppTheme.primaryNavy,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
+                              _MessageBubble(
+                                message: msg,
+                                isMe: isMe,
+                                continues: continues,
                               ),
-                            ),
-                          _MessageBubble(
-                            message: msg,
-                            isMe: isMe,
-                            continues: continues,
-                          ),
-                        ],
-                      );
-                    },
-                  ),
+                            ],
+                          );
+                        },
+                      ),
           ),
           SafeArea(
             top: false,
@@ -353,6 +350,10 @@ class _MessageBubble extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final avatarPath = message.senderAvatarPath;
+    final avatarFuture = avatarPath == null || avatarPath.isEmpty
+        ? null
+        : SupabaseService.signedAvatarUrl(avatarPath);
     final radius = BorderRadius.only(
       topLeft: const Radius.circular(18),
       topRight: const Radius.circular(18),
@@ -363,9 +364,8 @@ class _MessageBubble extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(top: continues ? 2 : 7, bottom: 1),
       child: Row(
-        mainAxisAlignment: isMe
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
+        mainAxisAlignment:
+            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           if (!isMe) ...[
@@ -373,19 +373,44 @@ class _MessageBubble extends StatelessWidget {
               width: 30,
               child: continues
                   ? null
-                  : InkWell(
-                      customBorder: const CircleBorder(),
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              StudentProfileScreen(studentId: message.senderId),
-                        ),
-                      ),
-                      child: StudentAvatar(
-                        displayName: message.senderName,
-                        avatarKey: message.senderAvatarPath,
-                        radius: 14,
-                      ),
+                  : CircleAvatar(
+                      radius: 14,
+                      backgroundColor: AppTheme.tealLight,
+                      child: avatarFuture == null
+                          ? Text(
+                              message.senderName.isEmpty
+                                  ? '?'
+                                  : message.senderName[0].toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.primaryNavy,
+                              ),
+                            )
+                          : FutureBuilder<String>(
+                              future: avatarFuture,
+                              builder: (context, snapshot) =>
+                                  snapshot.hasData
+                                      ? ClipOval(
+                                          child: Image.network(
+                                            snapshot.data!,
+                                            width: 28,
+                                            height: 28,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        )
+                                      : Text(
+                                          message.senderName.isEmpty
+                                              ? '?'
+                                              : message.senderName[0]
+                                                  .toUpperCase(),
+                                          style: const TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w700,
+                                            color: AppTheme.primaryNavy,
+                                          ),
+                                        ),
+                            ),
                     ),
             ),
             const SizedBox(width: 5),
@@ -418,21 +443,12 @@ class _MessageBubble extends StatelessWidget {
                       if (!isMe && !continues)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 3),
-                          child: InkWell(
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => StudentProfileScreen(
-                                  studentId: message.senderId,
-                                ),
-                              ),
-                            ),
-                            child: Text(
-                              message.senderName,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.tealAccent,
-                              ),
+                          child: Text(
+                            message.senderName,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.tealAccent,
                             ),
                           ),
                         ),
@@ -466,3 +482,4 @@ class _MessageBubble extends StatelessWidget {
     );
   }
 }
+
