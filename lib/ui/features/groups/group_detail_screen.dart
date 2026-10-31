@@ -218,6 +218,78 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     }, 'Présence enregistrée.');
   }
 
+  Future<void> _editSession(StudyGroupModel group, StudySessionModel session) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => CreateSessionScreen(
+          groupId: group.id,
+          groupTopic: group.topic,
+          session: session,
+        ),
+      ),
+    );
+    if (saved == true) await _load();
+  }
+
+  Future<void> _cancelSession(StudySessionModel session) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Annuler cette rencontre ?'),
+        content: const Text(
+          'Les membres pourront toujours consulter la rencontre annulée et son historique.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Garder'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Annuler la rencontre'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _run(
+        () => GroupRepository.instance.cancelSession(session.id),
+        'Rencontre annulée.',
+      );
+    }
+  }
+
+  Future<void> _deleteSession(StudySessionModel session) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Supprimer cette rencontre ?'),
+        content: const Text(
+          'La suppression est possible seulement si personne ne s’est inscrit et si aucun historique de présence n’existe. Sinon, vous pourrez l’annuler pour garder son historique.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Retour'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: AppTheme.alertError,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _run(
+        () => GroupRepository.instance.deleteSession(session.id),
+        'Rencontre supprimée.',
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading)
@@ -459,6 +531,14 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 session: s,
                 isMember: member,
                 busy: _acting,
+                canManage:
+                    uid != null &&
+                    s.createdBy == uid &&
+                    s.status == 'scheduled' &&
+                    s.startTime.isAfter(DateTime.now()),
+                onEdit: () => _editSession(g, s),
+                onCancel: () => _cancelSession(s),
+                onDelete: () => _deleteSession(s),
                 onConfirm: (v) => _run(
                   () => AttendanceRepository.instance.setSessionConfirmation(
                     s.id,
@@ -531,17 +611,26 @@ class _SessionCard extends StatelessWidget {
   final StudySessionModel session;
   final bool isMember;
   final bool busy;
+  final bool canManage;
+  final VoidCallback onEdit;
+  final VoidCallback onCancel;
+  final VoidCallback onDelete;
   final ValueChanged<bool> onConfirm;
   final VoidCallback onReport;
   const _SessionCard({
     required this.session,
     required this.isMember,
     required this.busy,
+    required this.canManage,
+    required this.onEdit,
+    required this.onCancel,
+    required this.onDelete,
     required this.onConfirm,
     required this.onReport,
   });
   @override
   Widget build(BuildContext context) {
+    final cancelled = session.status == 'cancelled';
     final ended = session.isEnded || session.status == 'completed';
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 5),
@@ -566,7 +655,45 @@ class _SessionCard extends StatelessWidget {
                     ),
                   ),
                 ),
-                if (ended) const Chip(label: Text('Terminée')),
+                if (cancelled)
+                  const Chip(label: Text('Annulée'))
+                else if (ended)
+                  const Chip(label: Text('Terminée')),
+                if (canManage)
+                  PopupMenuButton<String>(
+                    tooltip: 'Gérer la rencontre',
+                    onSelected: (action) {
+                      if (action == 'edit') onEdit();
+                      if (action == 'cancel') onCancel();
+                      if (action == 'delete') onDelete();
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.edit_outlined),
+                          title: Text('Modifier'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'cancel',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.event_busy_outlined),
+                          title: Text('Annuler'),
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: Icon(Icons.delete_outline),
+                          title: Text('Supprimer'),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
             const SizedBox(height: 8),
@@ -585,6 +712,7 @@ class _SessionCard extends StatelessWidget {
             if (isMember &&
                 session.id != 'legacy' &&
                 !ended &&
+                !cancelled &&
                 session.status == 'scheduled')
               Align(
                 alignment: Alignment.centerRight,

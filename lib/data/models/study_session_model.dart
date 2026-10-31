@@ -7,6 +7,7 @@ class StudySessionModel {
   final DateTime startTime;
   final DateTime endTime;
   final String status;
+  final String? createdBy;
   final bool isConfirmed;
   final String attendanceStatus;
 
@@ -19,22 +20,35 @@ class StudySessionModel {
     required this.startTime,
     required this.endTime,
     this.status = 'scheduled',
+    this.createdBy,
     this.isConfirmed = false,
     this.attendanceStatus = 'pending',
   });
 
   bool get isEnded => DateTime.now().isAfter(endTime) || status == 'completed';
 
-  StudySessionModel copyWith({bool? isConfirmed, String? attendanceStatus}) =>
+  StudySessionModel copyWith({
+    String? topic,
+    String? description,
+    bool clearDescription = false,
+    String? meetingLocation,
+    DateTime? startTime,
+    DateTime? endTime,
+    String? status,
+    String? createdBy,
+    bool? isConfirmed,
+    String? attendanceStatus,
+  }) =>
       StudySessionModel(
         id: id,
         groupId: groupId,
-        topic: topic,
-        description: description,
-        meetingLocation: meetingLocation,
-        startTime: startTime,
-        endTime: endTime,
-        status: status,
+        topic: topic ?? this.topic,
+        description: clearDescription ? null : description ?? this.description,
+        meetingLocation: meetingLocation ?? this.meetingLocation,
+        startTime: startTime ?? this.startTime,
+        endTime: endTime ?? this.endTime,
+        status: status ?? this.status,
+        createdBy: createdBy ?? this.createdBy,
         isConfirmed: isConfirmed ?? this.isConfirmed,
         attendanceStatus: attendanceStatus ?? this.attendanceStatus,
       );
@@ -61,6 +75,7 @@ class StudySessionModel {
       startTime: DateTime.parse(json['start_time'] as String),
       endTime: DateTime.parse(json['end_time'] as String),
       status: json['status'] as String? ?? 'scheduled',
+      createdBy: json['created_by'] as String?,
       isConfirmed: mine?['attendance_confirmed'] as bool? ?? false,
       attendanceStatus: mine?['attendance_status'] as String? ?? 'pending',
     );

@@ -139,7 +139,7 @@ Pour connecter votre propre instance Supabase :
    supabase/migrations/20261018_initial_schema.sql
    ```
 4. Collez chaque fichier dans une nouvelle requête et cliquez sur **Run** avant de passer au suivant.
-5. La migration `20261031120000_persistent_groups_and_sessions.sql` transforme les groupes existants en communautés durables et conserve leurs rencontres et leurs historiques.
+5. Les migrations `20261031133304_persistent_groups_and_sessions.sql`, `20261031134645_group_icons.sql` et `20261031140258_manage_study_sessions.sql` transforment les groupes existants en communautés durables, remplacent les photos de groupe par des icônes et ajoutent la gestion sécurisée des rencontres.
 6. Les premières migrations créent automatiquement :
    - La table `profiles` sécurisée (sans stockage d'email).
    - La table `study_groups` avec contrainte sur les 12 matières.
@@ -271,3 +271,5 @@ Pour ouvrir l'application à la 2ème année (L2), 3ème année (L3), ou à d'au
 Un groupe représente maintenant un espace de discussion durable : nom, icône emoji, matière, sujet de travail, description et limite de membres. Il n’exige ni horaire ni lieu lors de sa création. Les membres gardent le même chat d’une semaine à l’autre.
 
 Les rencontres en présentiel sont enregistrées séparément dans `study_sessions`. Un groupe peut en organiser plusieurs; chaque rencontre garde son propre sujet, lieu, horaire, participants et suivi de présence. La migration `supabase/migrations/20261031133304_persistent_groups_and_sessions.sql` ajoute ce modèle et transforme chaque ancienne séance planifiée en première rencontre, en conservant les identifiants de groupe, les conversations et les adhésions existantes.
+
+L’accueil met en avant les rencontres à venir et permet de rejoindre une rencontre ou d’en proposer une dans un groupe existant ou nouveau. Le créateur d’une rencontre future peut la modifier, l’annuler ou la supprimer. La suppression est refusée si des membres se sont inscrits ou si un historique de présence existe; l’annulation conserve alors l’historique.

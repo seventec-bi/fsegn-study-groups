@@ -5,9 +5,11 @@ import '../../../data/repositories/group_repository.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
 import '../../core/group_icon.dart';
+import 'create_session_screen.dart';
 
 class CreateGroupScreen extends StatefulWidget {
-  const CreateGroupScreen({super.key});
+  final bool scheduleFirstSession;
+  const CreateGroupScreen({super.key, this.scheduleFirstSession = false});
   @override
   State<CreateGroupScreen> createState() => _CreateGroupScreenState();
 }
@@ -42,7 +44,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       _error = null;
     });
     try {
-      await GroupRepository.instance.createGroup(
+      final group = await GroupRepository.instance.createGroup(
         name: _name.text.trim(),
         iconEmoji: _iconEmoji,
         subject: _subject!,
@@ -52,10 +54,25 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             : _description.text.trim(),
         capacity: _capacity,
       );
+      var sessionCreated = false;
+      if (widget.scheduleFirstSession && mounted) {
+        sessionCreated =
+            await Navigator.of(context).push<bool>(
+              MaterialPageRoute(
+                builder: (_) => CreateSessionScreen(
+                  groupId: group.id,
+                  groupTopic: group.topic,
+                ),
+              ),
+            ) ??
+            false;
+      }
       if (mounted) {
         UiHelpers.showSnackBar(
           context,
-          'Votre groupe est prêt !',
+          widget.scheduleFirstSession && !sessionCreated
+              ? 'Groupe créé. Vous pourrez proposer une rencontre plus tard.'
+              : 'Votre groupe est prêt !',
         );
         Navigator.of(context).pop(true);
       }

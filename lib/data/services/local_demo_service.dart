@@ -492,6 +492,7 @@ class LocalDemoService {
     final session = StudySessionModel(
       id: _uuid.v4(),
       groupId: groupId,
+      createdBy: _currentProfile.id,
       topic: topic.trim(),
       description: description,
       meetingLocation: location.trim(),
@@ -499,6 +500,80 @@ class LocalDemoService {
       endTime: end,
     );
     _groups[index] = g.copyWith(sessions: [...g.sessions, session]);
+  }
+
+  Future<void> updateSession({
+    required String sessionId,
+    required String topic,
+    required String location,
+    required DateTime start,
+    required DateTime end,
+    String? description,
+  }) async {
+    final index = _groups.indexWhere(
+      (g) => g.sessions.any((s) => s.id == sessionId),
+    );
+    if (index < 0) throw Exception('Rencontre introuvable.');
+    final group = _groups[index];
+    final session = group.sessions.firstWhere((s) => s.id == sessionId);
+    if (session.createdBy != _currentProfile.id)
+      throw Exception('Seul le créateur peut modifier cette rencontre.');
+    if (session.status != 'scheduled' || !session.startTime.isAfter(DateTime.now()))
+      throw Exception('Cette rencontre ne peut plus être modifiée.');
+    if (!start.isAfter(DateTime.now()) || !end.isAfter(start))
+      throw Exception('Vérifiez les horaires de la rencontre.');
+    _groups[index] = group.copyWith(
+      sessions: group.sessions
+          .map(
+            (s) => s.id == sessionId
+                ? s.copyWith(
+                    topic: topic.trim(),
+                    description: description?.trim(),
+                    clearDescription: description?.trim().isEmpty ?? true,
+                    meetingLocation: location.trim(),
+                    startTime: start,
+                    endTime: end,
+                  )
+                : s,
+          )
+          .toList(),
+    );
+  }
+
+  Future<void> cancelSession(String sessionId) async {
+    final index = _groups.indexWhere(
+      (g) => g.sessions.any((s) => s.id == sessionId),
+    );
+    if (index < 0) throw Exception('Rencontre introuvable.');
+    final group = _groups[index];
+    final session = group.sessions.firstWhere((s) => s.id == sessionId);
+    if (session.createdBy != _currentProfile.id)
+      throw Exception('Seul le créateur peut annuler cette rencontre.');
+    if (session.status != 'scheduled' || !session.startTime.isAfter(DateTime.now()))
+      throw Exception('Cette rencontre ne peut plus être annulée.');
+    _groups[index] = group.copyWith(
+      sessions: group.sessions
+          .map((s) => s.id == sessionId ? s.copyWith(status: 'cancelled') : s)
+          .toList(),
+    );
+  }
+
+  Future<void> deleteSession(String sessionId) async {
+    final index = _groups.indexWhere(
+      (g) => g.sessions.any((s) => s.id == sessionId),
+    );
+    if (index < 0) throw Exception('Rencontre introuvable.');
+    final group = _groups[index];
+    final session = group.sessions.firstWhere((s) => s.id == sessionId);
+    if (session.createdBy != _currentProfile.id)
+      throw Exception('Seul le créateur peut supprimer cette rencontre.');
+    if (session.status != 'scheduled' || !session.startTime.isAfter(DateTime.now()))
+      throw Exception('Une rencontre passée ne peut pas être supprimée.');
+    if (session.isConfirmed || session.attendanceStatus != 'pending')
+      throw Exception('Un participant est déjà inscrit. Annulez plutôt la rencontre.');
+    _groups[index] = group.copyWith(
+      sessions: group.sessions.where((s) => s.id != sessionId).toList(),
+    );
   }
 
   Future<void> setSessionConfirmation(String sessionId, bool confirmed) async {

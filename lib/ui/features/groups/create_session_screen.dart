@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../data/models/study_session_model.dart';
 import '../../../data/repositories/group_repository.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
@@ -8,25 +9,41 @@ import '../../core/ui_helpers.dart';
 class CreateSessionScreen extends StatefulWidget {
   final String groupId;
   final String groupTopic;
+  final StudySessionModel? session;
   const CreateSessionScreen({
     super.key,
     required this.groupId,
     required this.groupTopic,
+    this.session,
   });
   @override
   State<CreateSessionScreen> createState() => _CreateSessionScreenState();
 }
 
 class _CreateSessionScreenState extends State<CreateSessionScreen> {
-  late final TextEditingController _topic = TextEditingController(
-    text: widget.groupTopic,
-  );
-  final _place = TextEditingController();
-  final _details = TextEditingController();
-  DateTime _date = DateTime.now().add(const Duration(days: 1));
-  TimeOfDay _start = const TimeOfDay(hour: 10, minute: 0);
-  TimeOfDay _end = const TimeOfDay(hour: 12, minute: 0);
+  late final TextEditingController _topic;
+  late final TextEditingController _place;
+  late final TextEditingController _details;
+  late DateTime _date;
+  late TimeOfDay _start;
+  late TimeOfDay _end;
   bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final session = widget.session;
+    _topic = TextEditingController(text: session?.topic ?? widget.groupTopic);
+    _place = TextEditingController(text: session?.meetingLocation ?? '');
+    _details = TextEditingController(text: session?.description ?? '');
+    _date = session?.startTime ?? DateTime.now().add(const Duration(days: 1));
+    _start = session == null
+        ? const TimeOfDay(hour: 10, minute: 0)
+        : TimeOfDay.fromDateTime(session.startTime);
+    _end = session == null
+        ? const TimeOfDay(hour: 12, minute: 0)
+        : TimeOfDay.fromDateTime(session.endTime);
+  }
 
   @override
   void dispose() {
@@ -59,16 +76,31 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
     }
     setState(() => _saving = true);
     try {
-      await GroupRepository.instance.createSession(
-        groupId: widget.groupId,
-        topic: _topic.text,
-        location: _place.text,
-        start: _at(_start),
-        end: _at(_end),
-        description: _details.text,
-      );
+      final session = widget.session;
+      if (session == null) {
+        await GroupRepository.instance.createSession(
+          groupId: widget.groupId,
+          topic: _topic.text,
+          location: _place.text,
+          start: _at(_start),
+          end: _at(_end),
+          description: _details.text,
+        );
+      } else {
+        await GroupRepository.instance.updateSession(
+          sessionId: session.id,
+          topic: _topic.text,
+          location: _place.text,
+          start: _at(_start),
+          end: _at(_end),
+          description: _details.text.trim().isEmpty ? null : _details.text,
+        );
+      }
       if (mounted) {
-        UiHelpers.showSnackBar(context, 'Rencontre ajoutée au groupe !');
+        UiHelpers.showSnackBar(
+          context,
+          session == null ? 'Rencontre ajoutée au groupe !' : 'Rencontre modifiée.',
+        );
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -85,7 +117,9 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
 
   @override
   Widget build(BuildContext context) => ResponsiveScaffold(
-    appBar: AppBar(title: const Text('Proposer une rencontre')),
+    appBar: AppBar(
+      title: Text(widget.session == null ? 'Proposer une rencontre' : 'Modifier la rencontre'),
+    ),
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: [
@@ -179,7 +213,7 @@ class _CreateSessionScreenState extends State<CreateSessionScreen> {
                   ),
                 )
               : const Icon(Icons.event_available_outlined),
-          label: const Text('Ajouter la rencontre'),
+          label: Text(widget.session == null ? 'Ajouter la rencontre' : 'Enregistrer'),
         ),
       ],
     ),

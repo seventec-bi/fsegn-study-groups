@@ -67,7 +67,7 @@ class GroupRepository extends ChangeNotifier {
         capacity, status, cohort_key, created_at,
         profiles!study_groups_creator_id_fkey(display_name),
         group_members(id, user_id),
-        study_sessions(id, group_id, topic, description, meeting_location, start_time, end_time, status, study_session_members(user_id, attendance_confirmed, attendance_status))
+        study_sessions(id, group_id, created_by, topic, description, meeting_location, start_time, end_time, status, study_session_members(user_id, attendance_confirmed, attendance_status))
       ''')
           .eq('cohort_key', 'fsegn_l1_bc')
           .neq('status', 'cancelled');
@@ -136,7 +136,7 @@ class GroupRepository extends ChangeNotifier {
       capacity, status, cohort_key, created_at,
       profiles!study_groups_creator_id_fkey(display_name),
       group_members(id, user_id),
-      study_sessions(id, group_id, topic, description, meeting_location, start_time, end_time, status, study_session_members(user_id, attendance_confirmed, attendance_status))
+      study_sessions(id, group_id, created_by, topic, description, meeting_location, start_time, end_time, status, study_session_members(user_id, attendance_confirmed, attendance_status))
     ''')
         .eq('id', groupId)
         .maybeSingle();
@@ -188,7 +188,7 @@ class GroupRepository extends ChangeNotifier {
           capacity, status, cohort_key, created_at,
           profiles!study_groups_creator_id_fkey(display_name),
           group_members(id, user_id),
-          study_sessions(id, group_id, topic, description, meeting_location, start_time, end_time, status, study_session_members(user_id, attendance_confirmed, attendance_status))
+          study_sessions(id, group_id, created_by, topic, description, meeting_location, start_time, end_time, status, study_session_members(user_id, attendance_confirmed, attendance_status))
         ''')
         .inFilter('id', groupIds)
         .neq('status', 'cancelled')
@@ -320,6 +320,63 @@ class GroupRepository extends ChangeNotifier {
           'p_start_time': start.toIso8601String(),
           'p_end_time': end.toIso8601String(),
         },
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> updateSession({
+    required String sessionId,
+    required String topic,
+    required String location,
+    required DateTime start,
+    required DateTime end,
+    String? description,
+  }) async {
+    if (AppConfig.isDemoMode) {
+      await LocalDemoService.instance.updateSession(
+        sessionId: sessionId,
+        topic: topic,
+        location: location,
+        start: start,
+        end: end,
+        description: description,
+      );
+    } else {
+      await SupabaseService.client.rpc(
+        'update_study_session',
+        params: {
+          'p_session_id': sessionId,
+          'p_topic': topic.trim(),
+          'p_description': description,
+          'p_meeting_location': location.trim(),
+          'p_start_time': start.toIso8601String(),
+          'p_end_time': end.toIso8601String(),
+        },
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> cancelSession(String sessionId) async {
+    if (AppConfig.isDemoMode) {
+      await LocalDemoService.instance.cancelSession(sessionId);
+    } else {
+      await SupabaseService.client.rpc(
+        'cancel_study_session',
+        params: {'p_session_id': sessionId},
+      );
+    }
+    notifyListeners();
+  }
+
+  Future<void> deleteSession(String sessionId) async {
+    if (AppConfig.isDemoMode) {
+      await LocalDemoService.instance.deleteSession(sessionId);
+    } else {
+      await SupabaseService.client.rpc(
+        'delete_study_session',
+        params: {'p_session_id': sessionId},
       );
     }
     notifyListeners();

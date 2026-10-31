@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../groups/group_list_screen.dart';
+import '../groups/study_session_discovery_screen.dart';
 import '../profile/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -13,7 +14,7 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = const [
-    GroupListScreen(),
+    StudySessionDiscoveryScreen(),
     GroupListScreen(initialUserGroupsOnly: true),
     ProfileScreen(),
   ];
@@ -35,9 +36,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
                 Text(
                   _currentIndex == 0
-                      ? 'Explorer les groupes'
+                      ? 'Trouver une séance en présentiel'
                       : (_currentIndex == 1
-                            ? 'Mes séances d’étude'
+                            ? 'Mes groupes et conversations'
                             : 'Mon profil & assiduité'),
                   style: const TextStyle(fontSize: 11, color: Colors.white70),
                 ),
@@ -58,12 +59,12 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(
             icon: Icon(Icons.explore_outlined),
             selectedIcon: Icon(Icons.explore),
-            label: 'Explorer',
+            label: 'Séances',
           ),
           NavigationDestination(
             icon: Icon(Icons.event_available_outlined),
             selectedIcon: Icon(Icons.event_available),
-            label: 'Mes Groupes',
+            label: 'Mes groupes',
           ),
           NavigationDestination(
             icon: Icon(Icons.person_outline),
