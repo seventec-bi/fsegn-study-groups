@@ -267,7 +267,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         title: Text(group.topic, maxLines: 1, overflow: TextOverflow.ellipsis),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: Text('${group.subject} • ${group.meetingLocation}'),
+          child: Text('${group.name} • ${group.subject}'),
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => Navigator.of(context).push(
