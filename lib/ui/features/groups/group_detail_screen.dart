@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../../core/constants/subjects.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/study_group_model.dart';
+import '../../../data/models/study_session_model.dart';
 import '../../../data/models/group_member_model.dart';
 import '../../../data/repositories/group_repository.dart';
 import '../../../data/repositories/attendance_repository.dart';
@@ -8,14 +11,14 @@ import '../../../data/repositories/auth_repository.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
 import '../../core/student_avatar.dart';
+import '../../core/group_cover.dart';
 import '../chat/group_chat_screen.dart';
 import '../profile/student_profile_screen.dart';
+import 'create_session_screen.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final String groupId;
-
   const GroupDetailScreen({super.key, required this.groupId});
-
   @override
   State<GroupDetailScreen> createState() => _GroupDetailScreenState();
 }
@@ -23,791 +26,633 @@ class GroupDetailScreen extends StatefulWidget {
 class _GroupDetailScreenState extends State<GroupDetailScreen> {
   StudyGroupModel? _group;
   List<GroupMemberModel> _members = [];
-  bool _isLoading = true;
-  bool _isActionLoading = false;
-  String? _errorMessage;
+  bool _loading = true;
+  bool _acting = false;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _loadGroupDetails();
+    _load();
   }
 
-  Future<void> _loadGroupDetails() async {
+  Future<void> _load() async {
     setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+      _loading = true;
+      _error = null;
     });
-
     try {
-      final g = await GroupRepository.instance.getGroupById(widget.groupId);
-      final m = await GroupRepository.instance.getGroupMembers(widget.groupId);
-      if (mounted) {
-        setState(() {
-          _group = g;
-          _members = m;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _errorMessage = e.toString().replaceAll('Exception: ', '');
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  // Directive #2: Transactional Join
-  Future<void> _handleJoin() async {
-    setState(() => _isActionLoading = true);
-    try {
-      await GroupRepository.instance.joinGroup(widget.groupId);
-      if (mounted) {
-        UiHelpers.showSnackBar(
-          context,
-          'Vous avez rejoint le groupe d’étude !',
-        );
-        await _loadGroupDetails();
-      }
-    } catch (e) {
-      if (mounted) {
-        UiHelpers.showSnackBar(
-          context,
-          e.toString().replaceAll('Exception: ', ''),
-          isError: true,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isActionLoading = false);
-    }
-  }
-
-  Future<void> _handleLeave() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Quitter le groupe'),
-        content: const Text(
-          'Voulez-vous vraiment libérer votre place dans ce groupe ?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Annuler'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.alertError,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Quitter'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    setState(() => _isActionLoading = true);
-    try {
-      await GroupRepository.instance.leaveGroup(widget.groupId);
-      if (mounted) {
-        UiHelpers.showSnackBar(context, 'Vous avez quitté le groupe.');
-        await _loadGroupDetails();
-      }
-    } catch (e) {
-      if (mounted) {
-        UiHelpers.showSnackBar(
-          context,
-          e.toString().replaceAll('Exception: ', ''),
-          isError: true,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isActionLoading = false);
-    }
-  }
-
-  Future<void> _handleCancelGroup() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Annuler la séance'),
-        content: const Text(
-          'Cette action informera les membres et annulera la séance d’étude. Confirmer ?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Retour'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.alertError,
-            ),
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Annuler le groupe'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-
-    setState(() => _isActionLoading = true);
-    try {
-      await GroupRepository.instance.cancelGroup(widget.groupId);
-      if (mounted) {
-        UiHelpers.showSnackBar(context, 'Le groupe a été annulé.');
-        Navigator.of(context).pop();
-      }
-    } catch (e) {
-      if (mounted) {
-        UiHelpers.showSnackBar(
-          context,
-          e.toString().replaceAll('Exception: ', ''),
-          isError: true,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isActionLoading = false);
-    }
-  }
-
-  // Pre-session attendance confirmation toggle (Directive #3: creator is unconfirmed by default)
-  Future<void> _toggleConfirmation(bool target) async {
-    setState(() => _isActionLoading = true);
-    try {
-      await AttendanceRepository.instance.setConfirmation(
+      final group = await GroupRepository.instance.getGroupById(widget.groupId);
+      final members = await GroupRepository.instance.getGroupMembers(
         widget.groupId,
-        target,
       );
+      if (mounted)
+        setState(() {
+          _group = group;
+          _members = members;
+        });
+    } catch (e) {
+      if (mounted)
+        setState(() => _error = e.toString().replaceAll('Exception: ', ''));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _run(Future<void> Function() action, String message) async {
+    setState(() => _acting = true);
+    try {
+      await action();
       if (mounted) {
-        UiHelpers.showSnackBar(
-          context,
-          target
-              ? 'Présence confirmée ! Merci pour votre engagement.'
-              : 'Confirmation de présence annulée.',
-        );
-        await _loadGroupDetails();
+        UiHelpers.showSnackBar(context, message);
+        await _load();
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted)
         UiHelpers.showSnackBar(
           context,
           e.toString().replaceAll('Exception: ', ''),
           isError: true,
         );
-      }
     } finally {
-      if (mounted) setState(() => _isActionLoading = false);
+      if (mounted) setState(() => _acting = false);
     }
   }
 
-  // Directive #4: Post-session honest attendance recording dialog
-  Future<void> _showPostSessionAttendanceDialog() async {
-    final result = await showDialog<bool>(
+  Future<void> _edit(StudyGroupModel group) async {
+    final name = TextEditingController(text: group.name);
+    final topic = TextEditingController(text: group.topic);
+    final desc = TextEditingController(text: group.description ?? '');
+    var capacity = group.capacity;
+    var subject = group.subject;
+    final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Enregistrer votre assiduité'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppTheme.tealLight,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: const Text(
-                AttendanceRepository.disclaimerText,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textDark,
-                  height: 1.3,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialog) => AlertDialog(
+          title: const Text('Modifier le groupe'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: name,
+                  maxLength: 80,
+                  decoration: const InputDecoration(labelText: 'Nom du groupe'),
                 ),
-              ),
+                DropdownButtonFormField<String>(
+                  initialValue: subject,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Matière'),
+                  items: Subjects.list
+                      .map(
+                        (s) => DropdownMenuItem(
+                          value: s,
+                          child: Text(s, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (v) {
+                    if (v != null) setDialog(() => subject = v);
+                  },
+                ),
+                TextField(
+                  controller: topic,
+                  maxLength: 150,
+                  decoration: const InputDecoration(
+                    labelText: 'Ce que vous étudiez',
+                  ),
+                ),
+                TextField(
+                  controller: desc,
+                  maxLength: 400,
+                  maxLines: 3,
+                  decoration: const InputDecoration(labelText: 'Description'),
+                ),
+                Row(
+                  children: [
+                    const Expanded(child: Text('Limite de membres')),
+                    IconButton(
+                      onPressed: capacity > _members.length
+                          ? () => setDialog(() => capacity--)
+                          : null,
+                      icon: const Icon(Icons.remove),
+                    ),
+                    Text('$capacity'),
+                    IconButton(
+                      onPressed: capacity < 20
+                          ? () => setDialog(() => capacity++)
+                          : null,
+                      icon: const Icon(Icons.add),
+                    ),
+                  ],
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Avez-vous été présent à cette séance de révision ?',
-              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Retour'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Enregistrer'),
             ),
           ],
         ),
+      ),
+    );
+    if (saved == true && mounted) {
+      await _run(
+        () => GroupRepository.instance.updateGroup(
+          groupId: group.id,
+          name: name.text,
+          subject: subject,
+          topic: topic.text,
+          description: desc.text.trim().isEmpty ? null : desc.text.trim(),
+          capacity: capacity,
+        ),
+        'Groupe mis à jour.',
+      );
+    }
+    name.dispose();
+    topic.dispose();
+    desc.dispose();
+  }
+
+  Future<void> _changeCover(StudyGroupModel group) async {
+    final image = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 82,
+      maxWidth: 1000,
+      maxHeight: 1000,
+    );
+    if (image == null || !mounted) return;
+    final bytes = await image.readAsBytes();
+    await _run(
+      () => GroupRepository.instance.uploadGroupCover(
+        groupId: group.id,
+        bytes: bytes,
+        extension: image.name.split('.').last,
+      ),
+      'Photo du groupe mise à jour.',
+    );
+  }
+
+  Future<void> _declareAttendance(StudySessionModel session) async {
+    final attended = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Déclarer votre présence'),
+        content: const Text(
+          'Avez-vous participé à cette rencontre ? Votre déclaration mettra à jour votre score de fiabilité.',
+        ),
         actions: [
-          OutlinedButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Je n’ai pas pu assister (-15 pts si confirmé)'),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, null),
+            child: const Text('Plus tard'),
           ),
-          const SizedBox(height: 8),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('J’étais bien présent (+5 pts)'),
+          OutlinedButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Non'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Oui, j’y étais'),
           ),
         ],
       ),
     );
-
-    if (result == null) return;
-
-    setState(() => _isActionLoading = true);
-    try {
-      final res = await AttendanceRepository.instance.recordAttendance(
-        widget.groupId,
-        result,
+    if (attended == null) return;
+    await _run(() async {
+      await AttendanceRepository.instance.recordSessionAttendance(
+        session.id,
+        attended,
       );
-      if (mounted) {
-        final delta = res['score_delta'] as int? ?? 0;
-        final newScore = res['new_score'] as int? ?? 100;
-        final sign = delta >= 0 ? '+$delta' : '$delta';
-        UiHelpers.showSnackBar(
-          context,
-          'Assiduité enregistrée ! Impact score : $sign pt (Nouveau score : $newScore%)',
-        );
-        await _loadGroupDetails();
-      }
-    } catch (e) {
-      if (mounted) {
-        UiHelpers.showSnackBar(
-          context,
-          e.toString().replaceAll('Exception: ', ''),
-          isError: true,
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isActionLoading = false);
-    }
+    }, 'Présence enregistrée.');
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
+    if (_loading)
       return const ResponsiveScaffold(
         body: Center(child: CircularProgressIndicator()),
       );
-    }
-
-    if (_group == null) {
+    final g = _group;
+    if (g == null)
       return ResponsiveScaffold(
-        appBar: AppBar(title: const Text('Groupe d’étude')),
+        appBar: AppBar(title: const Text('Groupe')),
         body: UiHelpers.buildEmptyState(
           icon: Icons.error_outline,
           title: 'Groupe introuvable',
-          description:
-              _errorMessage ??
-              'Ce groupe d’étude a été supprimé ou est inaccessible.',
+          description: _error ?? 'Ce groupe est inaccessible.',
           buttonText: 'Retour',
-          onButtonPressed: () => Navigator.of(context).pop(),
+          onButtonPressed: () => Navigator.pop(context),
+        ),
+      );
+    final uid = AuthRepository.instance.currentUserId;
+    final creator = uid == g.creatorId;
+    final member = g.isUserMember;
+    final sessions = [...g.sessions]
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    if (sessions.isEmpty &&
+        g.legacyStartTime != null &&
+        g.legacyEndTime != null) {
+      sessions.add(
+        StudySessionModel(
+          id: 'legacy',
+          groupId: g.id,
+          topic: g.topic,
+          meetingLocation: g.meetingLocation,
+          startTime: g.startTime,
+          endTime: g.endTime,
+          description: g.description,
+          status: g.status == 'cancelled' ? 'cancelled' : 'scheduled',
         ),
       );
     }
-
-    final g = _group!;
-    final currentUserId = AuthRepository.instance.currentUserId;
-    final isCreator = g.creatorId == currentUserId;
-    final isMember = g.isUserMember;
-    final isConfirmed = g.isUserConfirmed;
-    final isEnded = g.isEnded;
-    final hasStarted = g.hasStarted;
-
-    // Check current member attendance record
-    GroupMemberModel? myMemberRecord;
-    try {
-      myMemberRecord = _members.firstWhere((m) => m.userId == currentUserId);
-    } catch (_) {}
-
-    final bool attendanceAlreadyRecorded =
-        myMemberRecord?.attendanceRecordedAt != null ||
-        (myMemberRecord?.attendanceStatus != 'pending');
-
     return ResponsiveScaffold(
       appBar: AppBar(
-        title: Text(g.subject),
+        title: Text(g.name, overflow: TextOverflow.ellipsis),
         actions: [
-          if (isMember)
+          if (creator)
             IconButton(
-              icon: const Icon(Icons.chat_outlined),
+              onPressed: () => _edit(g),
+              tooltip: 'Modifier le groupe',
+              icon: const Icon(Icons.edit_outlined),
+            ),
+          if (member)
+            IconButton(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      GroupChatScreen(groupId: g.id, groupTitle: g.name),
+                ),
+              ),
               tooltip: 'Chat du groupe',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => GroupChatScreen(
-                      groupId: g.id,
-                      groupTitle: '${g.subject} • ${g.topic}',
-                    ),
-                  ),
-                );
-              },
+              icon: const Icon(Icons.chat_bubble_outline),
             ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadGroupDetails,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Subject & Free-text Topic Card
-              Card(
-                margin: EdgeInsets.zero,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  g.subject,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: AppTheme.tealAccent,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  g.topic,
-                                  style: const TextStyle(
-                                    fontSize: 19,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.primaryNavy,
-                                    letterSpacing: -0.2,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (isCreator)
-                            UiHelpers.buildBadge(
-                              text: 'Créateur',
-                              color: AppTheme.primaryNavy,
-                              textColor: AppTheme.primaryNavy,
-                              icon: Icons.star,
-                            )
-                          else if (isMember)
-                            UiHelpers.buildBadge(
-                              text: isConfirmed ? 'Confirmé' : 'Inscrit',
-                              color: isConfirmed
-                                  ? AppTheme.alertSuccess
-                                  : AppTheme.tealAccent,
-                              icon: isConfirmed
-                                  ? Icons.check_circle
-                                  : Icons.person,
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
-
-                      // Time & Location Info
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.access_time_filled,
-                            size: 16,
-                            color: AppTheme.textMuted,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              '${UiHelpers.formatDate(g.startTime)} • ${UiHelpers.formatTimeRange(g.startTime, g.endTime)}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: AppTheme.textDark,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.location_on,
-                            size: 16,
-                            color: AppTheme.textMuted,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              g.meetingLocation,
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w500,
-                                color: AppTheme.textDark,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      if (g.description != null &&
-                          g.description!.trim().isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        const Divider(color: AppTheme.borderSubtle),
-                        const SizedBox(height: 8),
-                        Text(
-                          g.description!,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: AppTheme.textDark,
-                            height: 1.4,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-
-                      // Capacity Progress Bar
-                      UiHelpers.buildCapacityBar(
-                        memberCount: _members.length,
-                        capacity: g.capacity,
-                      ),
-                    ],
-                  ),
-                ),
+        onRefresh: _load,
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppTheme.borderSubtle),
               ),
-              const SizedBox(height: 16),
-
-              // Action Buttons Section
-              if (_isActionLoading)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(16),
-                    child: CircularProgressIndicator(),
-                  ),
-                )
-              else ...[
-                // 1. Join Group Button (if not member)
-                if (!isMember) ...[
-                  if (isEnded)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Cette session d’étude est terminée.',
-                          style: TextStyle(
-                            color: AppTheme.textMuted,
-                            fontWeight: FontWeight.w600,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Stack(
+                        children: [
+                          GroupCover(
+                            imagePath: g.coverImagePath,
+                            size: 68,
+                            radius: 18,
                           ),
-                        ),
-                      ),
-                    )
-                  else if (g.isFull)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: AppTheme.alertError.withAlpha(20),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Center(
-                        child: Text(
-                          'Groupe complet (capacité maximale atteinte)',
-                          style: TextStyle(
-                            color: AppTheme.alertError,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    )
-                  else
-                    ElevatedButton.icon(
-                      onPressed: _handleJoin,
-                      icon: const Icon(Icons.group_add, size: 20),
-                      label: const Text('Rejoindre ce groupe d’étude'),
-                    ),
-                ],
-
-                // 2. Member Actions
-                if (isMember) ...[
-                  // Pre-session attendance confirmation (up to start time)
-                  if (!hasStarted) ...[
-                    Card(
-                      margin: EdgeInsets.zero,
-                      color: isConfirmed
-                          ? AppTheme.tealLight
-                          : const Color(0xFFFFF9E6),
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Icon(
-                                  isConfirmed
-                                      ? Icons.check_circle_outline
-                                      : Icons.notification_important_outlined,
-                                  color: isConfirmed
-                                      ? AppTheme.alertSuccess
-                                      : const Color(0xFFD97706),
-                                  size: 20,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  isConfirmed
-                                      ? 'Votre présence est confirmée'
-                                      : 'Présence non confirmée',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w700,
-                                    color: isConfirmed
-                                        ? AppTheme.alertSuccess
-                                        : const Color(0xFFD97706),
+                          if (creator)
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: InkWell(
+                                onTap: () => _changeCover(g),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: AppTheme.primaryNavy,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.photo_camera_outlined,
+                                    size: 14,
+                                    color: Colors.white,
                                   ),
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              isConfirmed
-                                  ? 'Vous vous êtes engagé à participer. Vous pouvez annuler jusqu’au début de la séance.'
-                                  : 'Confirmez votre présence pour informer le groupe. Assister à une séance confirmée augmente votre score de fiabilité (+5 pts).',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: AppTheme.textDark,
-                                height: 1.3,
                               ),
                             ),
-                            const SizedBox(height: 12),
-                            if (!isConfirmed)
-                              ElevatedButton.icon(
-                                onPressed: () => _toggleConfirmation(true),
-                                icon: const Icon(Icons.check, size: 18),
-                                label: const Text('Confirmer ma présence'),
-                              )
-                            else
-                              OutlinedButton.icon(
-                                onPressed: () => _toggleConfirmation(false),
-                                icon: const Icon(Icons.close, size: 18),
-                                label: const Text('Annuler ma confirmation'),
-                              ),
-                          ],
-                        ),
+                        ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-
-                  // Post-session attendance self-recording
-                  if (isEnded) ...[
-                    Card(
-                      margin: EdgeInsets.zero,
-                      color: attendanceAlreadyRecorded
-                          ? Colors.grey.shade100
-                          : AppTheme.tealLight,
-                      child: Padding(
-                        padding: const EdgeInsets.all(14),
+                      const SizedBox(width: 14),
+                      Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              attendanceAlreadyRecorded
-                                  ? 'Assiduité enregistrée'
-                                  : 'Séance terminée : Enregistrez votre présence',
+                              g.name,
                               style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w700,
+                                fontSize: 20,
+                                fontWeight: FontWeight.w800,
                                 color: AppTheme.primaryNavy,
                               ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 4),
                             Text(
-                              attendanceAlreadyRecorded
-                                  ? 'Statut : ${myMemberRecord?.attendanceStatus == 'attended' ? 'Présent (+5 pts)' : 'Absent'}.'
-                                  : 'La séance est maintenant terminée. Veuillez déclarer en toute honnêteté si vous avez assisté.',
+                              g.subject,
                               style: const TextStyle(
-                                fontSize: 12,
-                                color: AppTheme.textMuted,
+                                color: AppTheme.tealAccent,
+                                fontWeight: FontWeight.w600,
                               ),
                             ),
-                            if (!attendanceAlreadyRecorded) ...[
-                              const SizedBox(height: 12),
-                              ElevatedButton.icon(
-                                onPressed: _showPostSessionAttendanceDialog,
-                                icon: const Icon(
-                                  Icons.fact_check_outlined,
-                                  size: 18,
-                                ),
-                                label: const Text('Déclarer ma présence'),
-                              ),
-                            ],
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-
-                  // Chat Button
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.deepSlate,
-                    ),
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => GroupChatScreen(
-                            groupId: g.id,
-                            groupTitle: '${g.subject} • ${g.topic}',
-                          ),
-                        ),
-                      );
-                    },
-                    icon: const Icon(Icons.chat_bubble_outline, size: 18),
-                    label: const Text('Ouvrir le Chat du Groupe'),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-
-                  // Leave or Cancel Actions
-                  if (isCreator)
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.alertError,
-                        side: const BorderSide(color: AppTheme.alertError),
-                      ),
-                      onPressed: _handleCancelGroup,
-                      icon: const Icon(Icons.cancel_outlined, size: 18),
-                      label: const Text('Annuler cette séance d’étude'),
-                    )
-                  else
-                    OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppTheme.alertError,
-                        side: const BorderSide(color: AppTheme.alertError),
-                      ),
-                      onPressed: _handleLeave,
-                      icon: const Icon(Icons.exit_to_app, size: 18),
-                      label: const Text('Quitter ce groupe'),
-                    ),
-                ],
-              ],
-              const SizedBox(height: 24),
-
-              // Members List Section
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
+                  const SizedBox(height: 16),
                   Text(
-                    'Membres inscrits (${_members.length}/${g.capacity})',
+                    g.topic,
                     style: const TextStyle(
                       fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.textDark,
+                    ),
+                  ),
+                  if (g.description?.isNotEmpty == true) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      g.description!,
+                      style: const TextStyle(
+                        height: 1.35,
+                        color: AppTheme.textMuted,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.people_alt_outlined,
+                        size: 18,
+                        color: AppTheme.tealAccent,
+                      ),
+                      const SizedBox(width: 7),
+                      Text(
+                        '${_members.length} membres · limite ${g.capacity}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      if (creator) const Spacer(),
+                      if (creator)
+                        TextButton(
+                          onPressed: () => _edit(g),
+                          child: const Text('Modifier'),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            if (!member) ...[
+              ElevatedButton.icon(
+                onPressed: _acting || g.isFull
+                    ? null
+                    : () => _run(
+                        () => GroupRepository.instance.joinGroup(g.id),
+                        'Vous avez rejoint le groupe !',
+                      ),
+                icon: const Icon(Icons.group_add_outlined),
+                label: Text(
+                  g.isFull ? 'Groupe complet' : 'Rejoindre ce groupe',
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (member) ...[
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.deepSlate,
+                ),
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        GroupChatScreen(groupId: g.id, groupTitle: g.name),
+                  ),
+                ),
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: const Text('Ouvrir la conversation'),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final added = await Navigator.push<bool>(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CreateSessionScreen(
+                        groupId: g.id,
+                        groupTopic: g.topic,
+                      ),
+                    ),
+                  );
+                  if (added == true) _load();
+                },
+                icon: const Icon(Icons.handshake_outlined),
+                label: const Text('Proposer une rencontre en présentiel'),
+              ),
+              const SizedBox(height: 18),
+            ],
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Rencontres du groupe',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.primaryNavy,
+                    ),
+                  ),
+                ),
+                if (sessions.isNotEmpty)
+                  Text(
+                    '${sessions.length}',
+                    style: const TextStyle(color: AppTheme.textMuted),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (sessions.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: AppTheme.tealLight.withAlpha(120),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Text(
+                  'Pas encore de rencontre planifiée. Vous pouvez discuter ici et proposer une quand le groupe le souhaite.',
+                  style: TextStyle(height: 1.4),
+                ),
+              ),
+            ...sessions.map(
+              (s) => _SessionCard(
+                session: s,
+                isMember: member,
+                busy: _acting,
+                onConfirm: (v) => _run(
+                  () => AttendanceRepository.instance.setSessionConfirmation(
+                    s.id,
+                    v,
+                  ),
+                  v ? 'Présence confirmée !' : 'Confirmation annulée.',
+                ),
+                onReport: () => _declareAttendance(s),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Membres (${_members.length}/${g.capacity})',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: AppTheme.primaryNavy,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ..._members.map(
+              (m) => Card(
+                child: ListTile(
+                  leading: StudentAvatar(
+                    displayName: m.displayName,
+                    avatarKey: m.avatarPath,
+                    radius: 21,
+                  ),
+                  title: Text(
+                    m.displayName + (m.userId == uid ? ' (vous)' : ''),
+                  ),
+                  subtitle: Text('Fiabilité : ${m.reliabilityScore}%'),
+                  trailing: m.isCreator
+                      ? const Icon(
+                          Icons.star_outline,
+                          color: AppTheme.tealAccent,
+                        )
+                      : null,
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => StudentProfileScreen(studentId: m.userId),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (member && !creator)
+              TextButton.icon(
+                onPressed: _acting
+                    ? null
+                    : () => _run(
+                        () => GroupRepository.instance.leaveGroup(g.id),
+                        'Vous avez quitté le groupe.',
+                      ),
+                icon: const Icon(Icons.logout, color: AppTheme.alertError),
+                label: const Text(
+                  'Quitter le groupe',
+                  style: TextStyle(color: AppTheme.alertError),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionCard extends StatelessWidget {
+  final StudySessionModel session;
+  final bool isMember;
+  final bool busy;
+  final ValueChanged<bool> onConfirm;
+  final VoidCallback onReport;
+  const _SessionCard({
+    required this.session,
+    required this.isMember,
+    required this.busy,
+    required this.onConfirm,
+    required this.onReport,
+  });
+  @override
+  Widget build(BuildContext context) {
+    final ended = session.isEnded || session.status == 'completed';
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 5),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(
+                  Icons.handshake_outlined,
+                  color: AppTheme.tealAccent,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    session.topic,
+                    style: const TextStyle(
                       fontWeight: FontWeight.w700,
                       color: AppTheme.primaryNavy,
                     ),
                   ),
-                ],
-              ),
+                ),
+                if (ended) const Chip(label: Text('Terminée')),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${UiHelpers.formatDate(session.startTime)} · ${UiHelpers.formatTimeRange(session.startTime, session.endTime)}',
+            ),
+            const SizedBox(height: 4),
+            Text(
+              session.meetingLocation,
+              style: const TextStyle(color: AppTheme.textMuted),
+            ),
+            if (session.description?.isNotEmpty == true) ...[
               const SizedBox(height: 8),
-
-              ..._members.map((member) {
-                final isMe = member.userId == currentUserId;
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 4),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 4,
-                    ),
-                    leading: StudentAvatar(
-                      displayName: member.displayName,
-                      avatarKey: member.avatarPath,
-                      radius: 22,
-                      backgroundColor: member.isCreator
-                          ? AppTheme.tealLight
-                          : null,
-                    ),
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) =>
-                            StudentProfileScreen(studentId: member.userId),
-                      ),
-                    ),
-                    title: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            member.displayName + (isMe ? ' (Vous)' : ''),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.textDark,
-                            ),
-                          ),
-                        ),
-                        if (member.isCreator)
-                          UiHelpers.buildBadge(
-                            text: 'Créateur',
-                            color: AppTheme.primaryNavy,
-                            icon: Icons.star,
-                          ),
-                      ],
-                    ),
-                    subtitle: Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Row(
-                        children: [
-                          Icon(
-                            member.attendanceConfirmed
-                                ? Icons.check_circle
-                                : Icons.radio_button_unchecked,
-                            size: 13,
-                            color: member.attendanceConfirmed
-                                ? AppTheme.alertSuccess
-                                : AppTheme.textMuted,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            member.attendanceConfirmed
-                                ? 'Présence confirmée'
-                                : 'Non confirmé',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: member.attendanceConfirmed
-                                  ? AppTheme.alertSuccess
-                                  : AppTheme.textMuted,
-                              fontWeight: member.attendanceConfirmed
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                          const Spacer(),
-                          Text(
-                            'Fiabilité : ${member.reliabilityScore}%',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AppTheme.textMuted,
-                              fontWeight: FontWeight.w500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                );
-              }),
-              const SizedBox(height: 20),
+              Text(session.description!),
             ],
-          ),
+            if (isMember &&
+                session.id != 'legacy' &&
+                !ended &&
+                session.status == 'scheduled')
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => onConfirm(!session.isConfirmed),
+                  icon: Icon(
+                    session.isConfirmed
+                        ? Icons.check_circle
+                        : Icons.circle_outlined,
+                  ),
+                  label: Text(
+                    session.isConfirmed ? 'Je ne viens plus' : 'Je serai là',
+                  ),
+                ),
+              ),
+            if (isMember &&
+                session.id != 'legacy' &&
+                ended &&
+                session.attendanceStatus == 'pending')
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: busy ? null : onReport,
+                  icon: const Icon(Icons.fact_check_outlined),
+                  label: const Text('Déclarer ma présence'),
+                ),
+              ),
+          ],
         ),
       ),
     );

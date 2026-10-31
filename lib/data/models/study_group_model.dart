@@ -1,48 +1,71 @@
-/// Domain model for a study group session.
+import 'study_session_model.dart';
+
+/// A persistent study community. Meetings are separate StudySessionModel rows.
 class StudyGroupModel {
   final String id;
   final String creatorId;
+  final String name;
+  final String? coverImagePath;
   final String subject;
-  final String topic; // Free-text chapter, lesson, or study topic
+  final String topic;
   final String? description;
-  final String meetingLocation;
-  final DateTime startTime;
-  final DateTime endTime;
   final int capacity;
   final String status;
   final String cohortKey;
   final DateTime createdAt;
-
-  // Joined / aggregated attributes for UI convenience
   final String creatorName;
   final int memberCount;
   final bool isUserMember;
-  final bool isUserConfirmed;
   final String userAttendanceStatus;
+  final List<StudySessionModel> sessions;
+  final String? legacyMeetingLocation;
+  final DateTime? legacyStartTime;
+  final DateTime? legacyEndTime;
+  final bool isUserConfirmed;
 
   const StudyGroupModel({
     required this.id,
     required this.creatorId,
+    this.name = '',
+    this.coverImagePath,
     required this.subject,
     required this.topic,
     this.description,
-    required this.meetingLocation,
-    required this.startTime,
-    required this.endTime,
-    required this.capacity,
+    this.capacity = 5,
     this.status = 'active',
     this.cohortKey = 'fsegn_l1_bc',
     required this.createdAt,
     this.creatorName = 'Étudiant FSEGN',
     this.memberCount = 1,
     this.isUserMember = false,
-    this.isUserConfirmed = false,
     this.userAttendanceStatus = 'pending',
-  });
+    this.sessions = const [],
+    String? meetingLocation,
+    DateTime? startTime,
+    DateTime? endTime,
+    this.isUserConfirmed = false,
+  }) : legacyMeetingLocation = meetingLocation,
+       legacyStartTime = startTime,
+       legacyEndTime = endTime;
 
-  bool get isEnded => DateTime.now().isAfter(endTime);
-  bool get hasStarted => DateTime.now().isAfter(startTime);
-  bool get isUpcoming => !isEnded;
+  String get meetingLocation =>
+      nextSession?.meetingLocation ?? legacyMeetingLocation ?? '';
+  DateTime get startTime =>
+      nextSession?.startTime ?? legacyStartTime ?? createdAt;
+  DateTime get endTime => nextSession?.endTime ?? legacyEndTime ?? createdAt;
+  bool get isEnded =>
+      nextSession?.isEnded ??
+      (legacyEndTime != null && DateTime.now().isAfter(legacyEndTime!));
+  bool get hasStarted =>
+      nextSession != null && DateTime.now().isAfter(nextSession!.startTime);
+
+  StudySessionModel? get nextSession {
+    final upcoming =
+        sessions.where((s) => s.status == 'scheduled' && !s.isEnded).toList()
+          ..sort((a, b) => a.startTime.compareTo(b.startTime));
+    return upcoming.isEmpty ? null : upcoming.first;
+  }
+
   bool get isFull => memberCount >= capacity;
   int get remainingSpots => (capacity - memberCount).clamp(0, capacity);
 
@@ -50,117 +73,88 @@ class StudyGroupModel {
     Map<String, dynamic> json, {
     String? currentUserId,
   }) {
-    // Check if member data was joined
-    final membersList = json['group_members'] as List<dynamic>?;
-    int calculatedMemberCount = json['member_count'] as int? ?? 0;
-    bool userMember = false;
-    bool userConfirmed = false;
-    String userStatus = 'pending';
-
-    if (membersList != null) {
-      calculatedMemberCount = membersList.length;
-      if (currentUserId != null) {
-        for (final m in membersList) {
-          if (m is Map<String, dynamic> && m['user_id'] == currentUserId) {
-            userMember = true;
-            userConfirmed = m['attendance_confirmed'] as bool? ?? false;
-            userStatus = m['attendance_status'] as String? ?? 'pending';
-            break;
-          }
-        }
-      }
-    } else if (currentUserId != null && json['creator_id'] == currentUserId) {
-      userMember = json['is_user_member'] as bool? ?? true;
-      userConfirmed = json['is_user_confirmed'] as bool? ?? false;
-      userStatus = json['user_attendance_status'] as String? ?? 'pending';
-    } else {
-      userMember = json['is_user_member'] as bool? ?? false;
-      userConfirmed = json['is_user_confirmed'] as bool? ?? false;
-      userStatus = json['user_attendance_status'] as String? ?? 'pending';
-    }
-
-    // Creator name from joined profile
-    String cName = 'Étudiant FSEGN';
+    final members = json['group_members'] as List<dynamic>?;
+    final userMember =
+        members?.any((m) => m is Map && m['user_id'] == currentUserId) ??
+        (json['is_user_member'] as bool? ??
+            json['creator_id'] == currentUserId);
+    var creatorName = 'Étudiant FSEGN';
     if (json['profiles'] is Map<String, dynamic>) {
-      cName = json['profiles']['display_name'] as String? ?? 'Étudiant FSEGN';
-    } else if (json['creator_name'] is String) {
-      cName = json['creator_name'] as String;
+      creatorName =
+          (json['profiles'] as Map<String, dynamic>)['display_name']
+              as String? ??
+          creatorName;
     }
-
+    final rawSessions = json['study_sessions'] as List<dynamic>? ?? const [];
     return StudyGroupModel(
       id: json['id'] as String,
       creatorId: json['creator_id'] as String,
+      name:
+          json['name'] as String? ??
+          (json['topic'] as String? ?? 'Groupe de révision'),
+      coverImagePath: json['cover_image_path'] as String?,
       subject: json['subject'] as String,
       topic: json['topic'] as String,
       description: json['description'] as String?,
-      meetingLocation: json['meeting_location'] as String,
-      startTime: DateTime.parse(json['start_time'] as String),
-      endTime: DateTime.parse(json['end_time'] as String),
       capacity: (json['capacity'] as num?)?.toInt() ?? 5,
       status: json['status'] as String? ?? 'active',
       cohortKey: json['cohort_key'] as String? ?? 'fsegn_l1_bc',
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'] as String)
-          : DateTime.now(),
-      creatorName: cName,
-      memberCount: calculatedMemberCount > 0
-          ? calculatedMemberCount
-          : (json['member_count'] as int? ?? 1),
+      createdAt: json['created_at'] == null
+          ? DateTime.now()
+          : DateTime.parse(json['created_at'] as String),
+      creatorName: creatorName,
+      memberCount:
+          members?.length ?? (json['member_count'] as num?)?.toInt() ?? 1,
       isUserMember: userMember,
-      isUserConfirmed: userConfirmed,
-      userAttendanceStatus: userStatus,
-    );
-  }
-
-  Map<String, dynamic> toInsertMap() {
-    return {
-      'creator_id': creatorId,
-      'subject': subject,
-      'topic': topic.trim(),
-      'description': description?.trim().isEmpty == true
+      userAttendanceStatus: 'pending',
+      sessions: rawSessions
+          .whereType<Map<String, dynamic>>()
+          .map(
+            (row) =>
+                StudySessionModel.fromJson(row, currentUserId: currentUserId),
+          )
+          .toList(),
+      meetingLocation: json['meeting_location'] as String?,
+      startTime: json['start_time'] == null
           ? null
-          : description?.trim(),
-      'meeting_location': meetingLocation.trim(),
-      'start_time': startTime.toIso8601String(),
-      'end_time': endTime.toIso8601String(),
-      'capacity': capacity,
-      'status': status,
-      'cohort_key': cohortKey,
-    };
+          : DateTime.parse(json['start_time'] as String),
+      endTime: json['end_time'] == null
+          ? null
+          : DateTime.parse(json['end_time'] as String),
+      isUserConfirmed: false,
+    );
   }
 
   StudyGroupModel copyWith({
-    String? subject,
-    String? topic,
-    String? description,
-    String? meetingLocation,
-    DateTime? startTime,
-    DateTime? endTime,
-    int? capacity,
-    String? status,
     int? memberCount,
     bool? isUserMember,
+    int? capacity,
+    String? name,
+    String? coverImagePath,
+    List<StudySessionModel>? sessions,
     bool? isUserConfirmed,
     String? userAttendanceStatus,
-  }) {
-    return StudyGroupModel(
-      id: id,
-      creatorId: creatorId,
-      subject: subject ?? this.subject,
-      topic: topic ?? this.topic,
-      description: description ?? this.description,
-      meetingLocation: meetingLocation ?? this.meetingLocation,
-      startTime: startTime ?? this.startTime,
-      endTime: endTime ?? this.endTime,
-      capacity: capacity ?? this.capacity,
-      status: status ?? this.status,
-      cohortKey: cohortKey,
-      createdAt: createdAt,
-      creatorName: creatorName,
-      memberCount: memberCount ?? this.memberCount,
-      isUserMember: isUserMember ?? this.isUserMember,
-      isUserConfirmed: isUserConfirmed ?? this.isUserConfirmed,
-      userAttendanceStatus: userAttendanceStatus ?? this.userAttendanceStatus,
-    );
-  }
+    String? status,
+  }) => StudyGroupModel(
+    id: id,
+    creatorId: creatorId,
+    name: name ?? this.name,
+    coverImagePath: coverImagePath ?? this.coverImagePath,
+    subject: subject,
+    topic: topic,
+    description: description,
+    capacity: capacity ?? this.capacity,
+    status: status ?? this.status,
+    cohortKey: cohortKey,
+    createdAt: createdAt,
+    creatorName: creatorName,
+    memberCount: memberCount ?? this.memberCount,
+    isUserMember: isUserMember ?? this.isUserMember,
+    userAttendanceStatus: userAttendanceStatus ?? this.userAttendanceStatus,
+    sessions: sessions ?? this.sessions,
+    meetingLocation: legacyMeetingLocation,
+    startTime: legacyStartTime,
+    endTime: legacyEndTime,
+    isUserConfirmed: isUserConfirmed ?? this.isUserConfirmed,
+  );
 }
