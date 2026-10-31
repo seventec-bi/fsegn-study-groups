@@ -22,18 +22,10 @@ abstract interface class MediaStorageService {
 
   Future<void> delete(String key);
 
-  Future<String> uploadGroupCover({
-    required String groupId,
-    required String userId,
-    required Uint8List bytes,
-    required String extension,
-  });
-  Future<String> groupCoverUrl(String key);
 }
 
 class SupabaseMediaStorageService implements MediaStorageService {
   static const _bucket = 'student-avatars';
-  static const _groupBucket = 'group-covers';
   static final Map<String, String> _urlCache = {};
   static final Map<String, DateTime> _urlExpiry = {};
 
@@ -74,37 +66,4 @@ class SupabaseMediaStorageService implements MediaStorageService {
     await SupabaseService.client.storage.from(_bucket).remove([key]);
   }
 
-  @override
-  Future<String> uploadGroupCover({
-    required String groupId,
-    required String userId,
-    required Uint8List bytes,
-    required String extension,
-  }) async {
-    final safeExtension = extension.toLowerCase() == 'png'
-        ? 'png'
-        : extension.toLowerCase() == 'webp'
-        ? 'webp'
-        : 'jpg';
-    final key =
-        '$groupId/${userId}_${DateTime.now().millisecondsSinceEpoch}.$safeExtension';
-    final type = safeExtension == 'png'
-        ? 'image/png'
-        : safeExtension == 'webp'
-        ? 'image/webp'
-        : 'image/jpeg';
-    await SupabaseService.client.storage
-        .from(_groupBucket)
-        .uploadBinary(
-          key,
-          bytes,
-          fileOptions: FileOptions(upsert: false, contentType: type),
-        );
-    return key;
-  }
-
-  @override
-  Future<String> groupCoverUrl(String key) => SupabaseService.client.storage
-      .from(_groupBucket)
-      .createSignedUrl(key, 3600);
 }

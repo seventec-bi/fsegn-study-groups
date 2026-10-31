@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import '../../../core/constants/subjects.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/models/study_group_model.dart';
@@ -11,7 +10,7 @@ import '../../../data/repositories/auth_repository.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
 import '../../core/student_avatar.dart';
-import '../../core/group_cover.dart';
+import '../../core/group_icon.dart';
 import '../chat/group_chat_screen.dart';
 import '../profile/student_profile_screen.dart';
 import 'create_session_screen.dart';
@@ -85,6 +84,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     final desc = TextEditingController(text: group.description ?? '');
     var capacity = group.capacity;
     var subject = group.subject;
+    var iconEmoji = group.iconEmoji;
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -94,6 +94,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                GroupIconPicker(
+                  selected: iconEmoji,
+                  onSelected: (emoji) => setDialog(() => iconEmoji = emoji),
+                ),
                 TextField(
                   controller: name,
                   maxLength: 80,
@@ -167,6 +171,7 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         () => GroupRepository.instance.updateGroup(
           groupId: group.id,
           name: name.text,
+          iconEmoji: iconEmoji,
           subject: subject,
           topic: topic.text,
           description: desc.text.trim().isEmpty ? null : desc.text.trim(),
@@ -178,25 +183,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     name.dispose();
     topic.dispose();
     desc.dispose();
-  }
-
-  Future<void> _changeCover(StudyGroupModel group) async {
-    final image = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 82,
-      maxWidth: 1000,
-      maxHeight: 1000,
-    );
-    if (image == null || !mounted) return;
-    final bytes = await image.readAsBytes();
-    await _run(
-      () => GroupRepository.instance.uploadGroupCover(
-        groupId: group.id,
-        bytes: bytes,
-        extension: image.name.split('.').last,
-      ),
-      'Photo du groupe mise à jour.',
-    );
   }
 
   Future<void> _declareAttendance(StudySessionModel session) async {
@@ -312,34 +298,10 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 children: [
                   Row(
                     children: [
-                      Stack(
-                        children: [
-                          GroupCover(
-                            imagePath: g.coverImagePath,
-                            size: 68,
-                            radius: 18,
-                          ),
-                          if (creator)
-                            Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: InkWell(
-                                onTap: () => _changeCover(g),
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(
-                                    color: AppTheme.primaryNavy,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.photo_camera_outlined,
-                                    size: 14,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
+                      GroupIcon(
+                        emoji: g.iconEmoji,
+                        size: 68,
+                        radius: 18,
                       ),
                       const SizedBox(width: 14),
                       Expanded(

@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:typed_data';
 import '../../../core/constants/subjects.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/group_repository.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
+import '../../core/group_icon.dart';
 
 class CreateGroupScreen extends StatefulWidget {
   const CreateGroupScreen({super.key});
@@ -19,8 +18,7 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
   final _topic = TextEditingController();
   final _description = TextEditingController();
   String? _subject;
-  XFile? _cover;
-  Uint8List? _coverBytes;
+  String _iconEmoji = '📚';
   int _capacity = 8;
   bool _loading = false;
   String? _error;
@@ -44,8 +42,9 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
       _error = null;
     });
     try {
-      final group = await GroupRepository.instance.createGroup(
+      await GroupRepository.instance.createGroup(
         name: _name.text.trim(),
+        iconEmoji: _iconEmoji,
         subject: _subject!,
         topic: _topic.text.trim(),
         description: _description.text.trim().isEmpty
@@ -53,24 +52,10 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
             : _description.text.trim(),
         capacity: _capacity,
       );
-      String? coverError;
-      if (_cover != null) {
-        try {
-          await GroupRepository.instance.uploadGroupCover(
-            groupId: group.id,
-            bytes: _coverBytes!,
-            extension: _cover!.name.split('.').last,
-          );
-        } catch (_) {
-          coverError =
-              'Le groupe est créé, mais la photo n’a pas pu être envoyée.';
-        }
-      }
       if (mounted) {
         UiHelpers.showSnackBar(
           context,
-          coverError ?? 'Votre groupe est prêt !',
-          isError: coverError != null,
+          'Votre groupe est prêt !',
         );
         Navigator.of(context).pop(true);
       }
@@ -117,52 +102,13 @@ class _CreateGroupScreenState extends State<CreateGroupScreen> {
           ),
           const SizedBox(height: 8),
           const Text(
-            'Photo du groupe (facultatif)',
+            'Choisissez une icône',
             style: TextStyle(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 8),
-          InkWell(
-            onTap: () async {
-              final image = await ImagePicker().pickImage(
-                source: ImageSource.gallery,
-                imageQuality: 82,
-                maxWidth: 1000,
-                maxHeight: 1000,
-              );
-              if (image != null && mounted) {
-                final bytes = await image.readAsBytes();
-                if (mounted)
-                  setState(() {
-                    _cover = image;
-                    _coverBytes = bytes;
-                  });
-              }
-            },
-            borderRadius: BorderRadius.circular(14),
-            child: Container(
-              height: 120,
-              decoration: BoxDecoration(
-                color: AppTheme.tealLight,
-                borderRadius: BorderRadius.circular(14),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: _cover == null
-                  ? const Center(
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.add_a_photo_outlined),
-                          SizedBox(width: 8),
-                          Text('Ajouter une image'),
-                        ],
-                      ),
-                    )
-                  : Image.memory(
-                      _coverBytes!,
-                      fit: BoxFit.cover,
-                      width: double.infinity,
-                    ),
-            ),
+          GroupIconPicker(
+            selected: _iconEmoji,
+            onSelected: (emoji) => setState(() => _iconEmoji = emoji),
           ),
           const SizedBox(height: 12),
           const Text('Matière', style: TextStyle(fontWeight: FontWeight.w700)),

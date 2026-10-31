@@ -5,7 +5,7 @@ import '../../../data/models/study_group_model.dart';
 import '../../../data/repositories/group_repository.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
-import '../../core/group_cover.dart';
+import '../../core/group_icon.dart';
 import 'group_filter_sheet.dart';
 import 'group_detail_screen.dart';
 import 'create_group_screen.dart';
@@ -361,7 +361,7 @@ class _GroupCard extends StatelessWidget {
               // Human first: group identity, then subject and activity.
               Row(
                 children: [
-                  GroupCover(imagePath: group.coverImagePath, size: 50),
+                  GroupIcon(emoji: group.iconEmoji, size: 50),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

@@ -1,12 +1,10 @@
 import 'package:flutter/foundation.dart';
-import 'dart:typed_data';
 import '../../core/env/app_config.dart';
 import '../models/study_group_model.dart';
 import '../models/group_member_model.dart';
 import '../models/study_session_model.dart';
 import '../services/supabase_service.dart';
 import '../services/local_demo_service.dart';
-import '../services/media_storage_service.dart';
 import 'auth_repository.dart';
 
 class GroupRepository extends ChangeNotifier {
@@ -65,7 +63,7 @@ class GroupRepository extends ChangeNotifier {
       var query = SupabaseService.client
           .from('study_groups')
           .select('''
-        id, creator_id, name, cover_image_path, subject, topic, description,
+        id, creator_id, name, icon_emoji, subject, topic, description,
         capacity, status, cohort_key, created_at,
         profiles!study_groups_creator_id_fkey(display_name),
         group_members(id, user_id),
@@ -134,7 +132,7 @@ class GroupRepository extends ChangeNotifier {
     final data = await SupabaseService.client
         .from('study_groups')
         .select('''
-      id, creator_id, name, cover_image_path, subject, topic, description,
+      id, creator_id, name, icon_emoji, subject, topic, description,
       capacity, status, cohort_key, created_at,
       profiles!study_groups_creator_id_fkey(display_name),
       group_members(id, user_id),
@@ -186,7 +184,7 @@ class GroupRepository extends ChangeNotifier {
     final data = await SupabaseService.client
         .from('study_groups')
         .select('''
-          id, creator_id, name, cover_image_path, subject, topic, description,
+          id, creator_id, name, icon_emoji, subject, topic, description,
           capacity, status, cohort_key, created_at,
           profiles!study_groups_creator_id_fkey(display_name),
           group_members(id, user_id),
@@ -245,7 +243,7 @@ class GroupRepository extends ChangeNotifier {
   /// with attendance_confirmed = false by default.
   Future<StudyGroupModel> createGroup({
     required String name,
-    String? coverImagePath,
+    required String iconEmoji,
     required String subject,
     required String topic,
     String? description,
@@ -254,6 +252,7 @@ class GroupRepository extends ChangeNotifier {
     if (AppConfig.isDemoMode) {
       final g = await LocalDemoService.instance.createGroup(
         name: name,
+        iconEmoji: iconEmoji,
         subject: subject,
         topic: topic,
         description: description,
@@ -271,7 +270,7 @@ class GroupRepository extends ChangeNotifier {
         .insert({
           'creator_id': uid,
           'name': name.trim(),
-          'cover_image_path': coverImagePath,
+          'icon_emoji': iconEmoji,
           'subject': subject,
           'topic': topic.trim(),
           'description': description?.trim().isEmpty == true
@@ -282,7 +281,7 @@ class GroupRepository extends ChangeNotifier {
           'cohort_key': 'fsegn_l1_bc',
         })
         .select('''
-      id, creator_id, name, cover_image_path, subject, topic, description,
+      id, creator_id, name, icon_emoji, subject, topic, description,
       capacity, status, cohort_key, created_at,
       profiles!study_groups_creator_id_fkey(display_name)
     ''')
@@ -291,27 +290,6 @@ class GroupRepository extends ChangeNotifier {
     final model = StudyGroupModel.fromJson(inserted, currentUserId: uid);
     notifyListeners();
     return model;
-  }
-
-  Future<void> uploadGroupCover({
-    required String groupId,
-    required Uint8List bytes,
-    required String extension,
-  }) async {
-    if (AppConfig.isDemoMode) return;
-    final uid = AuthRepository.instance.currentUserId;
-    if (uid == null) throw Exception('Non connecté');
-    final key = await MediaStorageService.instance.uploadGroupCover(
-      groupId: groupId,
-      userId: uid,
-      bytes: bytes,
-      extension: extension,
-    );
-    await SupabaseService.client
-        .from('study_groups')
-        .update({'cover_image_path': key})
-        .eq('id', groupId);
-    notifyListeners();
   }
 
   Future<void> createSession({
@@ -350,6 +328,7 @@ class GroupRepository extends ChangeNotifier {
   Future<void> updateGroup({
     required String groupId,
     required String name,
+    required String iconEmoji,
     required String subject,
     required String topic,
     required String? description,
@@ -359,6 +338,7 @@ class GroupRepository extends ChangeNotifier {
       await LocalDemoService.instance.updateGroup(
         groupId: groupId,
         name: name,
+        iconEmoji: iconEmoji,
         subject: subject,
         topic: topic,
         description: description,
@@ -369,6 +349,7 @@ class GroupRepository extends ChangeNotifier {
           .from('study_groups')
           .update({
             'name': name.trim(),
+            'icon_emoji': iconEmoji,
             'subject': subject,
             'topic': topic.trim(),
             'description': description,

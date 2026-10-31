@@ -5,7 +5,7 @@ class StudyGroupModel {
   final String id;
   final String creatorId;
   final String name;
-  final String? coverImagePath;
+  final String iconEmoji;
   final String subject;
   final String topic;
   final String? description;
@@ -27,7 +27,7 @@ class StudyGroupModel {
     required this.id,
     required this.creatorId,
     this.name = '',
-    this.coverImagePath,
+    this.iconEmoji = '📚',
     required this.subject,
     required this.topic,
     this.description,
@@ -92,7 +92,7 @@ class StudyGroupModel {
       name:
           json['name'] as String? ??
           (json['topic'] as String? ?? 'Groupe de révision'),
-      coverImagePath: json['cover_image_path'] as String?,
+      iconEmoji: json['icon_emoji'] as String? ?? '📚',
       subject: json['subject'] as String,
       topic: json['topic'] as String,
       description: json['description'] as String?,
@@ -130,7 +130,7 @@ class StudyGroupModel {
     bool? isUserMember,
     int? capacity,
     String? name,
-    String? coverImagePath,
+    String? iconEmoji,
     List<StudySessionModel>? sessions,
     bool? isUserConfirmed,
     String? userAttendanceStatus,
@@ -139,7 +139,7 @@ class StudyGroupModel {
     id: id,
     creatorId: creatorId,
     name: name ?? this.name,
-    coverImagePath: coverImagePath ?? this.coverImagePath,
+    iconEmoji: iconEmoji ?? this.iconEmoji,
     subject: subject,
     topic: topic,
     description: description,

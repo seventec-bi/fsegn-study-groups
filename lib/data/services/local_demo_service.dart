@@ -427,6 +427,7 @@ class LocalDemoService {
   // Directive #3: Creator added automatically as member with attendance_confirmed = false
   Future<StudyGroupModel> createGroup({
     required String name,
+    required String iconEmoji,
     required String subject,
     required String topic,
     String? description,
@@ -437,6 +438,7 @@ class LocalDemoService {
       id: groupId,
       creatorId: _currentProfile.id,
       name: name.trim(),
+      iconEmoji: iconEmoji,
       creatorName: _currentProfile.displayName,
       subject: subject,
       topic: topic.trim(),
@@ -562,6 +564,7 @@ class LocalDemoService {
   Future<void> updateGroup({
     required String groupId,
     required String name,
+    required String iconEmoji,
     required String subject,
     required String topic,
     required String? description,
@@ -580,7 +583,7 @@ class LocalDemoService {
       id: g.id,
       creatorId: g.creatorId,
       name: name.trim(),
-      coverImagePath: g.coverImagePath,
+      iconEmoji: iconEmoji,
       subject: subject,
       topic: topic.trim(),
       description: description,

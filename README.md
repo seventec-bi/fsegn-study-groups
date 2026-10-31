@@ -206,7 +206,7 @@ Pour valider le fonctionnement complet de l'application, suivez cette checklist 
 
 ### 3. Création d'un Groupe d'Étude
 - [ ] Cliquez sur le bouton flottant **« Nouveau groupe »**.
-- [ ] Choisissez le nom, la photo facultative, la matière, le sujet et la limite de membres.
+- [ ] Choisissez le nom, une icône emoji, la matière, le sujet et la limite de membres.
 - [ ] Publiez le groupe sans devoir choisir une date ni un lieu.
 - [ ] Vérifiez que le créateur est inscrit comme premier membre.
 - [ ] Depuis le groupe, proposez une rencontre en présentiel; elle apparaît dans la liste des rencontres du groupe.
@@ -268,6 +268,6 @@ Pour ouvrir l'application à la 2ème année (L2), 3ème année (L3), ou à d'au
 
 ## Groupes durables et rencontres répétées
 
-Un groupe représente maintenant un espace de discussion durable : nom, photo, matière, sujet de travail, description et limite de membres. Il n’exige ni horaire ni lieu lors de sa création. Les membres gardent le même chat d’une semaine à l’autre.
+Un groupe représente maintenant un espace de discussion durable : nom, icône emoji, matière, sujet de travail, description et limite de membres. Il n’exige ni horaire ni lieu lors de sa création. Les membres gardent le même chat d’une semaine à l’autre.
 
-Les rencontres en présentiel sont enregistrées séparément dans `study_sessions`. Un groupe peut en organiser plusieurs; chaque rencontre garde son propre sujet, lieu, horaire, participants et suivi de présence. La migration `supabase/migrations/20261031120000_persistent_groups_and_sessions.sql` ajoute ce modèle et transforme chaque ancienne séance planifiée en première rencontre, en conservant les identifiants de groupe, les conversations et les adhésions existantes.
+Les rencontres en présentiel sont enregistrées séparément dans `study_sessions`. Un groupe peut en organiser plusieurs; chaque rencontre garde son propre sujet, lieu, horaire, participants et suivi de présence. La migration `supabase/migrations/20261031133304_persistent_groups_and_sessions.sql` ajoute ce modèle et transforme chaque ancienne séance planifiée en première rencontre, en conservant les identifiants de groupe, les conversations et les adhésions existantes.
