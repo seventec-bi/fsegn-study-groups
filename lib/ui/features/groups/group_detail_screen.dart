@@ -7,7 +7,9 @@ import '../../../data/repositories/attendance_repository.dart';
 import '../../../data/repositories/auth_repository.dart';
 import '../../core/responsive_scaffold.dart';
 import '../../core/ui_helpers.dart';
+import '../../core/student_avatar.dart';
 import '../chat/group_chat_screen.dart';
+import '../profile/student_profile_screen.dart';
 
 class GroupDetailScreen extends StatefulWidget {
   final String groupId;
@@ -726,16 +728,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                       horizontal: 14,
                       vertical: 4,
                     ),
-                    leading: CircleAvatar(
+                    leading: StudentAvatar(
+                      displayName: member.displayName,
+                      avatarKey: member.avatarPath,
+                      radius: 22,
                       backgroundColor: member.isCreator
-                          ? AppTheme.primaryNavy
-                          : AppTheme.tealAccent,
-                      foregroundColor: Colors.white,
-                      child: Text(
-                        member.displayName.isNotEmpty
-                            ? member.displayName[0].toUpperCase()
-                            : 'E',
-                        style: const TextStyle(fontWeight: FontWeight.w700),
+                          ? AppTheme.tealLight
+                          : null,
+                    ),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            StudentProfileScreen(studentId: member.userId),
                       ),
                     ),
                     title: Row(
